@@ -75,6 +75,7 @@
   "settings.lightMode": "حالت روشن",
   "settings.autoStart": "اجرای خودکار در شروع سیستم",
   "settings.autoCheckUpdate": "بررسی خودکار به‌روزرسانی",
+  "settings.silentUpdate": "به‌روزرسانی بی‌صدا",
   "settings.silentStart": "اجرای بی‌صدا",
   "settings.autoQuitWithoutCore": "ورود خودکار به حالت سبک",
   "settings.autoQuitWithoutCoreTooltip": "ورود خودکار به حالت سبک پس از بستن پنجره برای زمان مشخص",

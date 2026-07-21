@@ -90,7 +90,8 @@ const GeneralConfig: React.FC = () => {
     autoQuitWithoutCoreMode = 'core',
     customTheme = 'default.css',
     envType = [platform === 'win32' ? 'powershell' : 'bash'],
-    autoCheckUpdate,
+    autoCheckUpdate = true,
+    silentUpdate = true,
     githubProxy = 'auto',
     appTheme = 'system',
     language = 'zh-CN',
@@ -275,6 +276,15 @@ const GeneralConfig: React.FC = () => {
             isSelected={autoCheckUpdate}
             onValueChange={(v) => {
               patchAppConfig({ autoCheckUpdate: v })
+            }}
+          />
+        </SettingItem>
+        <SettingItem title={t('settings.silentUpdate')} divider>
+          <Switch
+            size="sm"
+            isSelected={silentUpdate}
+            onValueChange={(v) => {
+              patchAppConfig({ silentUpdate: v })
             }}
           />
         </SettingItem>

@@ -23,6 +23,17 @@ const GITHUB_PROXIES = [
   'https://download.mihomo.party'
 ]
 
+let updateInstallPromise: Promise<void> | undefined
+
+interface GitHubReleaseAsset {
+  name: string
+  digest?: string
+}
+
+interface GitHubRelease {
+  assets?: GitHubReleaseAsset[]
+}
+
 function buildDownloadUrls(githubUrl: string, proxyPref = ''): string[] {
   if (proxyPref === 'direct') return [githubUrl]
   if (proxyPref && proxyPref !== 'auto') return [`${proxyPref}/${githubUrl}`]
@@ -43,6 +54,32 @@ async function tryDownload(
     }
   }
   throw lastError
+}
+
+async function getGitHubAssetSha256(
+  version: string,
+  file: string,
+  proxy: { protocol: 'http'; host: string; port: number }
+): Promise<string> {
+  const releaseTag = encodeURIComponent(`v${version}`)
+  const res = await chromeRequest.get<GitHubRelease>(
+    `https://api.github.com/repos/mihomo-party-org/mihomo-party/releases/tags/${releaseTag}`,
+    {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      },
+      proxy,
+      timeout: 5000,
+      responseType: 'json'
+    }
+  )
+  const digest = res.data.assets?.find((asset) => asset.name === file)?.digest
+  const match = digest?.match(/^sha256:([a-f\d]{64})$/i)
+  if (!match) {
+    throw new Error(`GitHub Release does not provide a SHA-256 digest for "${file}"`)
+  }
+  return match[1].toLowerCase()
 }
 
 export async function checkUpdate(): Promise<IAppVersion | undefined> {
@@ -82,7 +119,17 @@ function compareVersions(a: string, b: string): number {
   return 0
 }
 
-export async function downloadAndInstallUpdate(version: string): Promise<void> {
+export function downloadAndInstallUpdate(version: string): Promise<void> {
+  if (updateInstallPromise) return updateInstallPromise
+
+  updateInstallPromise = installUpdate(version).catch((error) => {
+    updateInstallPromise = undefined
+    throw error
+  })
+  return updateInstallPromise
+}
+
+async function installUpdate(version: string): Promise<void> {
   const [{ 'mixed-port': mixedPort = DEFAULT_MIHOMO_PORTS.mixed }, { githubProxy = '' }] =
     await Promise.all([getControledMihomoConfig(), getAppConfig()])
   const githubBase = `https://github.com/mihomo-party-org/mihomo-party/releases/download/v${version}/`
@@ -114,11 +161,20 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
   const proxy = { protocol: 'http' as const, host: '127.0.0.1', port: mixedPort }
   try {
     if (!existsSync(path.join(dataDir(), file))) {
-      const sha256Res = await tryDownload(
-        buildDownloadUrls(`${githubBase}${file}.sha256`, githubProxy),
-        { proxy, responseType: 'text' }
-      )
-      const expectedHash = (sha256Res.data as string).trim().split(/\s+/)[0]
+      let expectedHash: string
+      try {
+        expectedHash = await getGitHubAssetSha256(version, file, proxy)
+      } catch (e) {
+        await appLogger.warn(
+          'Failed to get update SHA-256 from GitHub API, falling back to release checksum file',
+          e
+        )
+        const sha256Res = await tryDownload(
+          buildDownloadUrls(`${githubBase}${file}.sha256`, githubProxy),
+          { proxy, responseType: 'text' }
+        )
+        expectedHash = (sha256Res.data as string).trim().split(/\s+/)[0]
+      }
       // 进度只允许单调递增，避免多代理重试导致进度回退抽搐
       let lastPercent = -1
       const res = await tryDownload(buildDownloadUrls(`${githubBase}${file}`, githubProxy), {
@@ -147,19 +203,19 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
     if (file.endsWith('.exe')) {
       try {
         const installerPath = path.join(dataDir(), file)
+        const installerArgs = ['/S', '--updated', '--force-run']
         const isAdmin = await checkAdminPrivileges()
 
         if (isAdmin) {
           await appLogger.info('Running installer with existing admin privileges')
-          spawn(installerPath, ['/S', '--force-run'], {
+          spawn(installerPath, installerArgs, {
             detached: true,
             stdio: 'ignore'
           }).unref()
         } else {
           // 提升权限安装
           const escapedPath = installerPath.replace(/'/g, "''")
-          const args = ['/S', '--force-run']
-          const argsString = args.map((arg) => arg.replace(/'/g, "''")).join("', '")
+          const argsString = installerArgs.map((arg) => arg.replace(/'/g, "''")).join("', '")
 
           const command = `powershell  -NoProfile -Command "Start-Process -FilePath '${escapedPath}' -ArgumentList '${argsString}' -Verb RunAs -WindowStyle Hidden"`
 
@@ -170,6 +226,7 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
 
           await appLogger.info('Installer started successfully with elevation')
         }
+        app.quit()
       } catch (installerError) {
         await appLogger.error('Failed to start installer, trying fallback', installerError)
 
@@ -217,7 +274,10 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
       }
     }
   } catch (e) {
-    rm(path.join(dataDir(), file))
+    await appLogger.error('Failed to download or install update', e)
+    await rm(path.join(dataDir(), file), { force: true }).catch((removeError) =>
+      appLogger.warn('Failed to remove failed update file', removeError)
+    )
     throw e
   }
 }

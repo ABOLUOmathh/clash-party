@@ -78,6 +78,7 @@
   "settings.autoStart": "开机自启",
   "settings.autoStart.permissions": "正在以管理员权限配置计划任务，请在 UAC 对话框中点击'是'...",
   "settings.autoCheckUpdate": "自动检查更新",
+  "settings.silentUpdate": "静默更新",
   "settings.silentStart": "静默启动",
   "settings.autoQuitWithoutCore": "自动进入轻量模式",
   "settings.autoQuitWithoutCoreTooltip": "关闭窗口后指定时间自动进入轻量模式",
