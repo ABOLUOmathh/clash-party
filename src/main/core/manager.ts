@@ -117,7 +117,7 @@ interface CoreHookWaiter {
   attachProcess: (process: ChildProcess) => void
 }
 
-function hasCoreProcess(): boolean {
+export function hasCoreProcess(): boolean {
   return Boolean(child && !child.killed && child.exitCode === null && child.signalCode === null)
 }
 

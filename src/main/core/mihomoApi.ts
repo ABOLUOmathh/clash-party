@@ -1,6 +1,7 @@
 import { createConnection } from 'net'
 import axios, { AxiosInstance } from 'axios'
 import WebSocket from 'ws'
+import { app } from 'electron'
 import { getAppConfig, getControledMihomoConfig } from '../config'
 import { mainWindow } from '../window'
 import { tray } from '../resolve/tray'
@@ -9,7 +10,7 @@ import { floatingWindow } from '../resolve/floatingWindow'
 import { createLogger } from '../utils/logger'
 import { mihomoWorkConfigPath } from '../utils/dirs'
 import { generateProfile, getRuntimeConfig } from './factory'
-import { getMihomoIpcPath } from './manager'
+import { getMihomoIpcPath, hasCoreProcess, restartCore } from './manager'
 
 const mihomoApiLogger = createLogger('MihomoApi')
 
@@ -205,8 +206,27 @@ export async function mihomoVersion(): Promise<IMihomoVersion> {
 }
 
 export const patchMihomoConfig = async (patch: Partial<IMihomoConfig>): Promise<void> => {
-  const instance = await getAxios()
-  return await instance.patch('/configs', patch)
+  const patchConfig = async (): Promise<void> => {
+    const instance = await getAxios()
+    await instance.patch('/configs', patch)
+  }
+
+  // Configuration patches can also be the first recovery action after startup
+  // failed. Do not start the core during pre-ready migrations.
+  if (!hasCoreProcess() && app.isReady()) {
+    mihomoApiLogger.warn('Core is not running, restarting core before config patch')
+    await restartCore()
+  }
+
+  try {
+    await patchConfig()
+  } catch (error) {
+    if (hasCoreProcess() || !app.isReady()) throw error
+
+    mihomoApiLogger.warn('Core exited before config patch completed, restarting core', error)
+    await restartCore()
+    await patchConfig()
+  }
 }
 
 export const mihomoCloseConnection = async (id: string): Promise<void> => {
@@ -409,12 +429,24 @@ export const mihomoUpgradeUI = async (): Promise<void> => {
 
 export const mihomoHotReloadConfig = async (): Promise<void> => {
   mihomoApiLogger.info('mihomoHotReloadConfig called')
+  if (!hasCoreProcess()) {
+    mihomoApiLogger.warn('Core is not running, restarting core instead of hot reload')
+    await restartCore()
+    return
+  }
   const current = await generateProfile()
   const { diffWorkDir = false } = await getAppConfig()
   const configPath = diffWorkDir ? mihomoWorkConfigPath(current) : mihomoWorkConfigPath('work')
   mihomoApiLogger.info(`hot reload config path: ${configPath}`)
   const instance = await getAxios()
-  await instance.put('/configs?force=true', { path: configPath })
+  try {
+    await instance.put('/configs?force=true', { path: configPath })
+  } catch (error) {
+    if (hasCoreProcess()) throw error
+    mihomoApiLogger.warn('Core exited before hot reload completed, restarting core', error)
+    await restartCore()
+    return
+  }
   mihomoApiLogger.info('hot reload config completed')
   try {
     const { scheduleRuntimeConfigUpload } = await import('../resolve/gistApi')
