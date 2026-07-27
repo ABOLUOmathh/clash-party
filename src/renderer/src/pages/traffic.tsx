@@ -54,6 +54,9 @@ const TrafficPage: React.FC = () => {
   const [totalStats, setTotalStats] = useState({ upload: 0, download: 0, total: 0, count: 0 })
   const [bucketSizeMs, setBucketSizeMs] = useState(60 * 60 * 1000)
   const loadGenerationRef = useRef(0)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [expandingKey, setExpandingKey] = useState<string | null>(null)
+  const detailLoadIdRef = useRef(0)
 
   const load = useCallback(
     async (
@@ -117,6 +120,8 @@ const TrafficPage: React.FC = () => {
   const handleSelectRow = useCallback(
     async (label: string) => {
       if (selectedRow === label) {
+        detailLoadIdRef.current += 1
+        setDetailLoading(false)
         setSelectedRow(null)
         setSubStats([])
         setProxyStatsMap({})
@@ -126,15 +131,23 @@ const TrafficPage: React.FC = () => {
       setSelectedRow(label)
       setSelectedSubRow(null)
       setProxyStatsMap({})
+      const detailLoadId = ++detailLoadIdRef.current
+      setDetailLoading(true)
 
-      const { start, end } = getTimeRange(timeRange)
-      let subs: AggregatedData[]
-      if (activeView === 'host') {
-        subs = await getDevicesByHost(label, start, end)
-      } else {
-        subs = await getSubStatsByHost(activeView, label, start, end)
+      try {
+        const { start, end } = getTimeRange(timeRange)
+        const subs =
+          activeView === 'host'
+            ? await getDevicesByHost(label, start, end)
+            : await getSubStatsByHost(activeView, label, start, end)
+        if (detailLoadId === detailLoadIdRef.current) {
+          setSubStats(subs)
+        }
+      } finally {
+        if (detailLoadId === detailLoadIdRef.current) {
+          setDetailLoading(false)
+        }
       }
-      setSubStats(subs)
     },
     [selectedRow, activeView, timeRange]
   )
@@ -150,8 +163,13 @@ const TrafficPage: React.FC = () => {
 
       if (proxyStatsMap[compositeKey]) return
       const { start, end } = getTimeRange(timeRange)
-      const proxies = await getProxyStatsByHost(activeView, parentLabel, subLabel, start, end)
-      setProxyStatsMap((prev) => ({ ...prev, [compositeKey]: proxies }))
+      setExpandingKey(compositeKey)
+      try {
+        const proxies = await getProxyStatsByHost(activeView, parentLabel, subLabel, start, end)
+        setProxyStatsMap((prev) => ({ ...prev, [compositeKey]: proxies }))
+      } finally {
+        setExpandingKey((current) => (current === compositeKey ? null : current))
+      }
     },
     [selectedSubRow, proxyStatsMap, activeView, timeRange]
   )
@@ -258,6 +276,8 @@ const TrafficPage: React.FC = () => {
             proxyStatsMap={proxyStatsMap}
             selectedSubRow={selectedSubRow}
             onSubRowClick={handleSubRowClick}
+            isLoading={detailLoading}
+            expandingKey={expandingKey}
           />
         )}
       </div>
