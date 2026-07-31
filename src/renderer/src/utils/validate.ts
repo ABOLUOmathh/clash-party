@@ -40,7 +40,7 @@ const portValidator = (value: string): boolean => {
 }
 
 const ipv4CIDRValidator = (value: string): boolean => {
-  // 验证 IPv4 CIDR 格式 (例如: 192.168.1.0/24)
+  // 验证 IPv4 CIDR 格式 (例如：192.168.1.0/24)
   if (!value.includes('/')) return false
 
   const [ip, cidr] = value.split('/')
@@ -50,7 +50,7 @@ const ipv4CIDRValidator = (value: string): boolean => {
 }
 
 const ipv6CIDRValidator = (value: string): boolean => {
-  // 验证 IPv6 CIDR 格式 (例如: 2001:db8::/32)
+  // 验证 IPv6 CIDR 格式 (例如：2001:db8::/32)
   if (!value.includes('/')) return false
 
   const [ip, cidr] = value.split('/')
@@ -68,6 +68,39 @@ export const getError = (result: ValidationResult): string | undefined => result
 // IP CIDR 验证器（同时支持 IPv4 和 IPv6）
 const ipCIDRValidator = (value: string): boolean => {
   return ipv4CIDRValidator(value) || ipv6CIDRValidator(value)
+}
+
+const sysProxyBypassValidator = (
+  value: string,
+  targetPlatform: NodeJS.Platform | string
+): boolean => {
+  const entry = value.trim()
+  if (entry === '') return false
+
+  if (validator.isIP(entry)) return true
+
+  if (targetPlatform !== 'win32' && validator.isIPRange(entry)) return true
+
+  if (
+    (targetPlatform === 'win32' || targetPlatform === 'darwin') &&
+    entry.toLowerCase() === '<local>'
+  ) {
+    return true
+  }
+
+  if (targetPlatform === 'win32' && /[*?]/.test(entry)) {
+    const normalizedPattern = entry.replace(/\*/g, 'wildcard').replace(/\?/g, 'q')
+    return validator.isFQDN(normalizedPattern, {
+      require_tld: false,
+      allow_numeric_tld: true
+    })
+  }
+
+  return validator.isFQDN(entry, {
+    require_tld: false,
+    allow_numeric_tld: true,
+    allow_wildcard: true
+  })
 }
 
 // DOMAIN-WILDCARD 验证器 - 仅支持 * 和 ? 通配符
@@ -90,25 +123,25 @@ const geositeValidator = (value: string): boolean => {
 
 // GEOIP 验证器 - 国家代码验证（ISO 3166-1 alpha-2）
 const geoipValidator = (value: string): boolean => {
-  // 支持2位国家代码（大小写不敏感）
+  // 支持 2 位国家代码（大小写不敏感）
   return validator.isAlpha(value) && value.length === 2
 }
 
 // ASN 验证器 - 自治系统号验证
 const asnValidator = (value: string): boolean => {
-  // ASN 范围: 1 - 4294967295 (32-bit)
+  // ASN 范围：1 - 4294967295 (32-bit)
   return validator.isInt(value, { min: 1, max: 4294967295 })
 }
 
 // UID 验证器 - Linux 用户 ID 验证
 const uidValidator = (value: string): boolean => {
-  // UID 范围: 0 - 65535 (大多数系统)
+  // UID 范围：0 - 65535 (大多数系统)
   return validator.isInt(value, { min: 0, max: 65535 })
 }
 
 // DSCP 验证器 - 区分服务代码点验证
 const dscpValidator = (value: string): boolean => {
-  // DSCP 范围: 0 - 63 (6-bit)
+  // DSCP 范围：0 - 63 (6-bit)
   return validator.isInt(value, { min: 0, max: 63 })
 }
 
@@ -218,7 +251,7 @@ const logicRuleValidator = (value: string): boolean => {
 // SUB-RULE 验证器 - 子规则验证
 const subRuleValidator = (value: string): boolean => {
   if (value.length === 0) return false
-  // 格式: (RULE_TYPE,payload) 或 provider_name
+  // 格式：(RULE_TYPE,payload) 或 provider_name
   if (value.startsWith('(') && value.endsWith(')')) {
     return logicRuleValidator(value)
   }
@@ -228,7 +261,7 @@ const subRuleValidator = (value: string): boolean => {
 
 // 端口范围验证器（支持单个端口或范围）
 const portRangeValidator = (value: string): boolean => {
-  // 支持单个端口或范围格式，如: 80 或 8000-9000
+  // 支持单个端口或范围格式，如：80 或 8000-9000
   if (value.includes('-')) {
     const [start, end] = value.split('-')
     return validator.isPort(start) && validator.isPort(end) && parseInt(start) <= parseInt(end)
@@ -264,7 +297,8 @@ export {
   portRangeValidator,
   ipv4CIDRValidator,
   ipv6CIDRValidator,
-  ipCIDRValidator
+  ipCIDRValidator,
+  sysProxyBypassValidator
 }
 
 // 通用验证结果类型
@@ -303,7 +337,7 @@ export const isValidListenAddress = (s: string | undefined): ValidationResult =>
 
   const v = s.trim()
 
-  // 格式: :port (仅端口)
+  // 格式：:port (仅端口)
   if (v.startsWith(':')) {
     return isValidPort(v.slice(1))
   }
@@ -318,7 +352,7 @@ export const isValidListenAddress = (s: string | undefined): ValidationResult =>
   const portResult = isValidPort(port)
   if (!portResult.ok) return portResult
 
-  // 格式: [IPv6]:port
+  // 格式：[IPv6]:port
   if (host.startsWith('[') && host.endsWith(']')) {
     const inner = host.slice(1, -1)
     return isIPv6(inner)
@@ -346,7 +380,7 @@ export const isValidListenAddressFull = (s: string | undefined): ValidationResul
 
   const v = s.trim()
 
-  // 格式: :port (仅端口)
+  // 格式：:port (仅端口)
   if (v.startsWith(':')) {
     return isValidPort(v.slice(1))
   }
@@ -361,13 +395,13 @@ export const isValidListenAddressFull = (s: string | undefined): ValidationResul
   const portResult = isValidPort(port)
   if (!portResult.ok) return portResult
 
-  // 格式: [IPv6]:port
+  // 格式：[IPv6]:port
   if (host.startsWith('[') && host.endsWith(']')) {
     const inner = host.slice(1, -1)
     return isIPv6(inner)
   }
 
-  // 特殊地址: 0.0.0.0 (监听所有 IPv4) 或 :: (监听所有 IPv6)
+  // 特殊地址：0.0.0.0 (监听所有 IPv4) 或 :: (监听所有 IPv6)
   if (host === '0.0.0.0' || host === '::') {
     return { ok: true }
   }

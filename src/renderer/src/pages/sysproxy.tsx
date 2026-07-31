@@ -7,6 +7,7 @@ import PacEditorModal from '@renderer/components/sysproxy/pac-editor-modal'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { platform } from '@renderer/utils/init'
 import { openUWPTool, triggerSysProxy } from '@renderer/utils/ipc'
+import { sysProxyBypassValidator } from '@renderer/utils/validate'
 import React, { Key, useState } from 'react'
 import { MdDeleteForever } from 'react-icons/md'
 import { useTranslation } from 'react-i18next'
@@ -73,6 +74,20 @@ const Sysproxy: React.FC = () => {
     setChanged(true)
   }
 
+  const normalizedBypass = values.bypass.map((entry) => entry.trim()).filter(Boolean)
+  const hasInvalidBypass = normalizedBypass.some(
+    (entry) => !sysProxyBypassValidator(entry, platform)
+  )
+  const bypassInputs = hasInvalidBypass ? values.bypass : [...values.bypass, '']
+  const bypassExample = platform === 'win32' ? '127.*' : '192.168.0.0/16'
+  const getBypassError = (entry: string): string | undefined => {
+    const trimmedEntry = entry.trim()
+    if (trimmedEntry === '' || sysProxyBypassValidator(trimmedEntry, platform)) return undefined
+    return t(
+      platform === 'win32' ? 'sysproxy.bypass.invalid.windows' : 'sysproxy.bypass.invalid.unix'
+    )
+  }
+
   const [openPacEditor, setOpenPacEditor] = useState(false)
 
   const handleBypassChange = (value: string, index: number): void => {
@@ -96,9 +111,16 @@ const Sysproxy: React.FC = () => {
 
     // 保存当前的开关状态，以便在失败时恢复
     const previousState = values.enable
+    const sysProxyPatch: ISysProxyConfig = { ...values }
+    if (hasInvalidBypass) {
+      // 存在非法条目时不覆盖已保存的绕过列表，其它系统代理设置照常保存
+      delete sysProxyPatch.bypass
+    } else {
+      sysProxyPatch.bypass = normalizedBypass
+    }
 
     try {
-      await patchAppConfig({ sysProxy: values })
+      await patchAppConfig({ sysProxy: sysProxyPatch })
       await triggerSysProxy(true)
 
       await patchAppConfig({ sysProxy: { enable: true } })
@@ -189,13 +211,15 @@ const Sysproxy: React.FC = () => {
             </SettingItem>
             <div className="flex flex-col items-stretch">
               <h3 className="mb-2">{t('sysproxy.bypass.title')}</h3>
-              {[...values.bypass, ''].map((domain, index) => (
+              {bypassInputs.map((domain, index) => (
                 <div key={index} className="mb-2 flex">
                   <Input
                     fullWidth
                     size="sm"
-                    placeholder={t('sysproxy.bypass.placeholder')}
+                    placeholder={t('sysproxy.bypass.placeholder', { example: bypassExample })}
                     value={domain}
+                    isInvalid={Boolean(getBypassError(domain))}
+                    errorMessage={getBypassError(domain)}
                     onValueChange={(v) => handleBypassChange(v, index)}
                   />
                   {index < values.bypass.length && (
@@ -211,6 +235,9 @@ const Sysproxy: React.FC = () => {
                   )}
                 </div>
               ))}
+              {hasInvalidBypass && (
+                <div className="px-1 text-xs text-danger">{t('sysproxy.bypass.notSaved')}</div>
+              )}
             </div>
           </>
         )}

@@ -93,6 +93,10 @@ async function enableSysProxy(helperTimeout?: number): Promise<void> {
   const { mode, host, bypass = defaultBypass } = sysProxy
   const { 'mixed-port': port = DEFAULT_MIHOMO_PORTS.mixed } = await getControledMihomoConfig()
   const proxyHost = host || '127.0.0.1'
+  const formattedBypass = bypass
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .join(process.platform === 'win32' ? ';' : ',')
 
   if (process.platform === 'darwin') {
     // macOS 需要 helper 提权
@@ -108,7 +112,7 @@ async function enableSysProxy(helperTimeout?: number): Promise<void> {
       await helperRequest(() =>
         axios.post(
           'http://localhost/global',
-          { host: proxyHost, port: port.toString(), bypass: bypass.join(',') },
+          { host: proxyHost, port: port.toString(), bypass: formattedBypass },
           helperAxiosOptions(helperTimeout)
         )
       )
@@ -119,7 +123,7 @@ async function enableSysProxy(helperTimeout?: number): Promise<void> {
       if (mode === 'auto') {
         triggerAutoProxy(true, `http://${proxyHost}:${pacPort}/pac`)
       } else {
-        triggerManualProxy(true, proxyHost, port, bypass.join(','))
+        triggerManualProxy(true, proxyHost, port, formattedBypass)
       }
     } catch (error) {
       await proxyLogger.error('Failed to enable system proxy', error)
