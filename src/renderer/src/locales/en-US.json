@@ -77,6 +77,7 @@
   "settings.lightMode": "Light Mode",
   "settings.autoStart": "Auto Start",
   "settings.autoStart.permissions": "Configuring scheduled tasks with administrator privileges, please click 'Yes' in the UAC dialog...",
+  "settings.autoUpdateProfileOnStart": "Update Subscriptions on Startup",
   "settings.autoCheckUpdate": "Auto Check Update",
   "settings.silentUpdate": "Silent Update",
   "settings.silentStart": "Silent Start",

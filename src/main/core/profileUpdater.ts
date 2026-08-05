@@ -1,12 +1,18 @@
 import { Cron } from 'croner'
-import { addProfileItem, getCurrentProfileItem, getProfileConfig, getProfileItem } from '../config'
+import {
+  addProfileItem,
+  getAppConfig,
+  getCurrentProfileItem,
+  getProfileConfig,
+  getProfileItem
+} from '../config'
 import { logger } from '../utils/logger'
 
 const intervalPool: Record<string, Cron | NodeJS.Timeout> = {}
 const delayedUpdatePool: Record<string, NodeJS.Timeout> = {}
 const updatingProfileIds = new Set<string>()
 
-// 定时触发的订阅刷新至少间隔1分钟
+// 定时触发的订阅刷新至少间隔 1 分钟
 const MIN_INTERVAL_MS = 60 * 1000
 const MAX_TIMER_DELAY_MS = 2_147_483_647
 
@@ -106,6 +112,7 @@ function scheduleDelayedCurrentUpdate(item: IProfileItem): void {
 }
 
 export async function initProfileUpdater(): Promise<void> {
+  const { autoUpdateProfileOnStart = true } = await getAppConfig()
   const { items = [], current } = await getProfileConfig()
   const currentItem = await getCurrentProfileItem()
 
@@ -115,10 +122,12 @@ export async function initProfileUpdater(): Promise<void> {
     if (item.type === 'remote' && item.autoUpdate && item.interval) {
       await addProfileUpdater(item)
 
-      try {
-        await addProfileItem(item)
-      } catch (e) {
-        await logger.warn(`[ProfileUpdater] Failed to init profile ${item.name}:`, e)
+      if (autoUpdateProfileOnStart) {
+        try {
+          await addProfileItem(item)
+        } catch (e) {
+          await logger.warn(`[ProfileUpdater] Failed to init profile ${item.name}:`, e)
+        }
       }
     }
 
@@ -133,10 +142,12 @@ export async function initProfileUpdater(): Promise<void> {
     const currentId = currentItem.id
     await addProfileUpdater(currentItem)
 
-    try {
-      await addProfileItem(currentItem)
-    } catch (e) {
-      await logger.warn(`[ProfileUpdater] Failed to init current profile:`, e)
+    if (autoUpdateProfileOnStart) {
+      try {
+        await addProfileItem(currentItem)
+      } catch (e) {
+        await logger.warn(`[ProfileUpdater] Failed to init current profile:`, e)
+      }
     }
 
     const latestCurrentItem = (await getProfileItem(currentId)) ?? currentItem

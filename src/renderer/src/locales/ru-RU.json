@@ -76,6 +76,7 @@
   "settings.darkMode": "Тёмная тема",
   "settings.lightMode": "Светлая тема",
   "settings.autoStart": "Автозапуск",
+  "settings.autoUpdateProfileOnStart": "Обновлять подписки при запуске",
   "settings.autoCheckUpdate": "Автоматическая проверка обновлений",
   "settings.silentUpdate": "Тихое обновление",
   "settings.silentStart": "Тихий запуск",

@@ -346,6 +346,7 @@ interface IAppConfig {
   appTheme: AppTheme
   customTheme?: string
   autoCheckUpdate: boolean
+  autoUpdateProfileOnStart: boolean
   silentUpdate: boolean
   githubProxy?: string
   silentStart: boolean

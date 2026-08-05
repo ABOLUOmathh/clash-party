@@ -91,6 +91,7 @@ const GeneralConfig: React.FC = () => {
     customTheme = 'default.css',
     envType = [platform === 'win32' ? 'powershell' : 'bash'],
     autoCheckUpdate = true,
+    autoUpdateProfileOnStart = true,
     silentUpdate = true,
     githubProxy = 'auto',
     appTheme = 'system',
@@ -267,6 +268,15 @@ const GeneralConfig: React.FC = () => {
               } finally {
                 mutateEnable()
               }
+            }}
+          />
+        </SettingItem>
+        <SettingItem title={t('settings.autoUpdateProfileOnStart')} divider>
+          <Switch
+            size="sm"
+            isSelected={autoUpdateProfileOnStart}
+            onValueChange={(v) => {
+              patchAppConfig({ autoUpdateProfileOnStart: v })
             }}
           />
         </SettingItem>

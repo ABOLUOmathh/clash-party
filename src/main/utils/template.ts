@@ -46,6 +46,7 @@ export const defaultConfig: IAppConfig = {
   proxyDisplayMode: 'simple',
   proxyDisplayOrder: 'default',
   autoCheckUpdate: true,
+  autoUpdateProfileOnStart: true,
   silentUpdate: true,
   autoCloseConnection: true,
   subscriptionTimeout: 30000,
