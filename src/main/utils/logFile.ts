@@ -23,6 +23,11 @@ interface LogFileState {
 const logFileStates = new Map<string, LogFileState>()
 
 let globalMaxLogFileSizeBytes = DEFAULT_MAX_LOG_FILE_SIZE_MB * MB
+let coreLogDisabled = false
+
+export function setCoreLogDisabled(value: boolean): void {
+  coreLogDisabled = value === true
+}
 
 function getLogFileState(filePath: string): LogFileState {
   const existing = logFileStates.get(filePath)
@@ -150,11 +155,13 @@ export async function appendToFileWithLimit(
 class CappedLogWritable extends Writable {
   private readonly resolvePath: () => string
   private readonly maxBytes: number
+  private readonly canWrite: () => boolean
 
-  constructor(filePath: LogFilePath, maxBytes: number) {
+  constructor(filePath: LogFilePath, maxBytes: number, canWrite: () => boolean = () => true) {
     super()
     this.resolvePath = typeof filePath === 'function' ? filePath : (): string => filePath
     this.maxBytes = maxBytes
+    this.canWrite = canWrite
   }
 
   _write(
@@ -162,6 +169,10 @@ class CappedLogWritable extends Writable {
     encoding: BufferEncoding,
     callback: (error?: Error | null) => void
   ): void {
+    if (!this.canWrite()) {
+      callback()
+      return
+    }
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, encoding)
     // 每次写入时重新解析路径，使日志能按当前日期自动轮转（与 app 日志一致）。
     appendToFileWithLimit(this.resolvePath(), buffer, this.maxBytes).then(
@@ -176,4 +187,11 @@ export function createCappedLogWritableStream(
   maxBytes = getGlobalMaxLogFileSizeBytes()
 ): Writable {
   return new CappedLogWritable(filePath, maxBytes)
+}
+
+export function createCoreLogWritableStream(
+  filePath: LogFilePath,
+  maxBytes = getGlobalMaxLogFileSizeBytes()
+): Writable {
+  return new CappedLogWritable(filePath, maxBytes, () => !coreLogDisabled)
 }

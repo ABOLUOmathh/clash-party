@@ -32,7 +32,7 @@ import { ensureRuntimeFiles, safeShowErrorBox } from '../utils/init'
 import { parseAgeSecretKeys } from '../utils/age'
 import i18next from '../../shared/i18n'
 import { managerLogger } from '../utils/logger'
-import { createCappedLogWritableStream } from '../utils/logFile'
+import { createCoreLogWritableStream } from '../utils/logFile'
 import {
   startMihomoTraffic,
   startMihomoConnections,
@@ -546,8 +546,8 @@ function spawnCoreProcess(config: CoreConfig): ChildProcess {
   }
 
   if (!detached) {
-    const stdout = createCappedLogWritableStream(coreLogPath)
-    const stderr = createCappedLogWritableStream(coreLogPath)
+    const stdout = createCoreLogWritableStream(coreLogPath)
+    const stderr = createCoreLogWritableStream(coreLogPath)
     proc.stdout?.pipe(stdout)
     proc.stderr?.pipe(stderr)
   }

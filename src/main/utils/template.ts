@@ -36,6 +36,7 @@ export const defaultConfig: IAppConfig = {
   maxLogDays: 7,
   maxLogFileSize: 10,
   disableAppLog: false,
+  disableCoreLog: false,
   proxyCols: 'auto',
   connectionDirection: 'asc',
   connectionOrderBy: 'time',

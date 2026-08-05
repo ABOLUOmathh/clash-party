@@ -4,7 +4,11 @@ import { atomicWriteFile, WriteQueue } from '../utils/safeFile'
 import { parse, stringify } from '../utils/yaml'
 import { deepMerge } from '../utils/merge'
 import { defaultConfig } from '../utils/template'
-import { normalizeMaxLogFileSizeMB, setGlobalMaxLogFileSizeMB } from '../utils/logFile'
+import {
+  normalizeMaxLogFileSizeMB,
+  setCoreLogDisabled,
+  setGlobalMaxLogFileSizeMB
+} from '../utils/logFile'
 import { setAppLogDisabled } from '../utils/logger'
 
 let appConfig: IAppConfig // config.yaml
@@ -25,6 +29,7 @@ export async function getAppConfig(force = false): Promise<IAppConfig> {
         await atomicWriteFile(appConfigPath(), stringify(mergedConfig))
       }
       setGlobalMaxLogFileSizeMB(mergedConfig.maxLogFileSize)
+      setCoreLogDisabled(mergedConfig.disableCoreLog === true)
       setAppLogDisabled(mergedConfig.disableAppLog === true)
       appConfig = mergedConfig
     })
@@ -47,6 +52,7 @@ export async function patchAppConfig(patch: Partial<IAppConfig>): Promise<void> 
     await atomicWriteFile(appConfigPath(), stringify(nextConfig))
     appConfig = nextConfig
     setGlobalMaxLogFileSizeMB(nextConfig.maxLogFileSize)
+    setCoreLogDisabled(nextConfig.disableCoreLog === true)
     setAppLogDisabled(nextConfig.disableAppLog === true)
   })
 }

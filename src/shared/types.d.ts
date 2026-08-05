@@ -355,6 +355,7 @@ interface IAppConfig {
   maxLogDays: number
   maxLogFileSize: number
   disableAppLog?: boolean
+  disableCoreLog?: boolean
   userAgent?: string
   delayTestConcurrency?: number
   delayTestUrl?: string

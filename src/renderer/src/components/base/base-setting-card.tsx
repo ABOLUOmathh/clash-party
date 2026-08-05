@@ -34,7 +34,7 @@ const SettingCard: React.FC<Props> = (props) => {
           <div className="flex justify-between items-center w-full">
             <span>{props.title}</span>
             <IoIosArrowBack
-              className={`transition duration-200 ml-2 h-[32px] text-lg text-foreground-500 ${isOpen ? '-rotate-90' : ''}`}
+              className={`transition duration-200 ml-2 h-8 text-lg text-foreground-500 ${isOpen ? '-rotate-90' : ''}`}
             />
           </div>
         }

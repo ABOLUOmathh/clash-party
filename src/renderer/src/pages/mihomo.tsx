@@ -106,6 +106,7 @@ const Mihomo: React.FC = () => {
     smartCollectorSize = 100,
     maxLogDays = 7,
     maxLogFileSize = 10,
+    disableCoreLog = false,
     sysProxy,
     showMixedPort,
     enableMixedPort = true,
@@ -1444,6 +1445,15 @@ const Mihomo: React.FC = () => {
                 if (isNaN(num) || num < 1) {
                   patchAppConfig({ maxLogFileSize: 1 })
                 }
+              }}
+            />
+          </SettingItem>
+          <SettingItem title={t('mihomo.disableCoreLog')} divider>
+            <Switch
+              size="sm"
+              isSelected={disableCoreLog}
+              onValueChange={(v) => {
+                patchAppConfig({ disableCoreLog: v })
               }}
             />
           </SettingItem>
