@@ -294,7 +294,7 @@ async function resolveProviderProxies(
   return providerProxies
 }
 
-export const mihomoGroups = async (): Promise<IMihomoMixedGroup[]> => {
+export const mihomoGroups = async (includeHidden = false): Promise<IMihomoMixedGroup[]> => {
   const { mode = 'rule' } = await getControledMihomoConfig()
   if (mode === 'direct') return []
   const [proxies, runtime] = await Promise.all([mihomoProxies(), getRuntimeConfig()])
@@ -302,14 +302,14 @@ export const mihomoGroups = async (): Promise<IMihomoMixedGroup[]> => {
 
   runtime?.['proxy-groups']?.forEach((group: { name: string; url?: string; use?: string[] }) => {
     const proxy = proxies.proxies[group.name]
-    if (isMihomoGroup(proxy) && !proxy.hidden) {
+    if (isMihomoGroup(proxy) && (includeHidden || !proxy.hidden)) {
       rawGroups.push({ group: { ...proxy, testUrl: group.url }, providers: group.use || [] })
     }
   })
 
   if (!rawGroups.find(({ group }) => group.name === 'GLOBAL')) {
     const global = proxies.proxies['GLOBAL']
-    if (isMihomoGroup(global) && !global.hidden) {
+    if (isMihomoGroup(global) && (includeHidden || !global.hidden)) {
       rawGroups.push({ group: global, providers: [] })
     }
   }

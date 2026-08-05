@@ -1,4 +1,15 @@
-import { Avatar, Button, Card, CardBody, Chip } from '@heroui/react'
+import {
+  Avatar,
+  Button,
+  Card,
+  CardBody,
+  Chip,
+  Dropdown,
+  DropdownItem,
+  DropdownMenu,
+  DropdownSection,
+  DropdownTrigger
+} from '@heroui/react'
 import BasePage from '@renderer/components/base/base-page'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import {
@@ -7,11 +18,17 @@ import {
   mihomoCloseAllConnections,
   mihomoProxyDelay
 } from '@renderer/utils/ipc'
+import { FaLocationCrosshairs } from 'react-icons/fa6'
 import { CgDetailsLess, CgDetailsMore } from 'react-icons/cg'
 import { TbCircleLetterD } from 'react-icons/tb'
-import { FaLocationCrosshairs } from 'react-icons/fa6'
 import { RxLetterCaseCapitalize } from 'react-icons/rx'
-import { MdVisibilityOff, MdDoubleArrow, MdOutlineSpeed } from 'react-icons/md'
+import {
+  MdCheck,
+  MdDoubleArrow,
+  MdFilterAlt,
+  MdOutlineSpeed,
+  MdVisibilityOff
+} from 'react-icons/md'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { GroupedVirtuoso, GroupedVirtuosoHandle } from 'react-virtuoso'
 import ProxyItem from '@renderer/components/proxies/proxy-item'
@@ -21,6 +38,7 @@ import CollapseInput from '@renderer/components/base/collapse-input'
 import { includesIgnoreCase } from '@renderer/utils/includes'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { useTranslation } from 'react-i18next'
+import { HiOutlineAdjustmentsHorizontal } from 'react-icons/hi2'
 
 const GROUP_EXPAND_STATE_KEY = 'proxy_group_expand_state'
 const EMPTY_GROUPS: IMihomoMixedGroup[] = []
@@ -128,7 +146,7 @@ const Proxies: React.FC = () => {
   const { t } = useTranslation()
   const { controledMihomoConfig } = useControledMihomoConfig()
   const { mode = 'rule' } = controledMihomoConfig || {}
-  const { groups: groupData, mutate } = useGroups()
+  const { groups: groupData, mutate, showHidden, setShowHidden } = useGroups()
   const groups = groupData ?? EMPTY_GROUPS
   const { appConfig, patchAppConfig } = useAppConfig()
   const {
@@ -631,69 +649,130 @@ const Proxies: React.FC = () => {
     <BasePage
       title={t('proxies.title')}
       header={
-        <>
-          <Button
-            size="sm"
-            isIconOnly
-            variant="light"
-            className="app-nodrag"
-            onPress={() => {
-              patchAppConfig({
-                hideUnavailableProxies: !appConfig?.hideUnavailableProxies
-              })
-            }}
-          >
-            <MdVisibilityOff
-              className={`text-lg ${appConfig?.hideUnavailableProxies ? 'text-warning' : 'text-foreground-500'}`}
-              title={
-                appConfig?.hideUnavailableProxies
-                  ? t('proxies.hideUnavailable.enabled')
-                  : t('proxies.hideUnavailable.disabled')
+        <Dropdown placement="bottom-end">
+          <DropdownTrigger>
+            <Button
+              size="sm"
+              isIconOnly
+              variant="light"
+              className="app-nodrag"
+              title={t('proxies.settings')}
+            >
+              <HiOutlineAdjustmentsHorizontal className="text-lg" />
+            </Button>
+          </DropdownTrigger>
+          <DropdownMenu
+            aria-label={t('proxies.settings')}
+            className="min-w-64 p-1"
+            onAction={(key) => {
+              switch (key) {
+                case 'show-hidden':
+                  setShowHidden((prev) => !prev)
+                  break
+                case 'hide-unavailable':
+                  void patchAppConfig({
+                    hideUnavailableProxies: !appConfig?.hideUnavailableProxies
+                  })
+                  break
+                case 'order-default':
+                  void patchAppConfig({ proxyDisplayOrder: 'default' })
+                  break
+                case 'order-delay':
+                  void patchAppConfig({ proxyDisplayOrder: 'delay' })
+                  break
+                case 'order-name':
+                  void patchAppConfig({ proxyDisplayOrder: 'name' })
+                  break
+                case 'mode-simple':
+                  void patchAppConfig({ proxyDisplayMode: 'simple' })
+                  break
+                case 'mode-full':
+                  void patchAppConfig({ proxyDisplayMode: 'full' })
+                  break
               }
-            />
-          </Button>
-          <Button
-            size="sm"
-            isIconOnly
-            variant="light"
-            className="app-nodrag"
-            onPress={() => {
-              patchAppConfig({
-                proxyDisplayOrder:
-                  proxyDisplayOrder === 'default'
-                    ? 'delay'
-                    : proxyDisplayOrder === 'delay'
-                      ? 'name'
-                      : 'default'
-              })
             }}
           >
-            {proxyDisplayOrder === 'default' ? (
-              <TbCircleLetterD className="text-lg" title={t('proxies.order.default')} />
-            ) : proxyDisplayOrder === 'delay' ? (
-              <MdOutlineSpeed className="text-lg" title={t('proxies.order.delay')} />
-            ) : (
-              <RxLetterCaseCapitalize className="text-lg" title={t('proxies.order.name')} />
-            )}
-          </Button>
-          <Button
-            size="sm"
-            isIconOnly
-            variant="light"
-            className="app-nodrag"
-            onPress={() => {
-              patchAppConfig({
-                proxyDisplayMode: proxyDisplayMode === 'simple' ? 'full' : 'simple'
-              })
-            }}
-          >
-            {proxyDisplayMode === 'full' ? (
-              <CgDetailsMore className="text-lg" title={t('proxies.mode.full')} />
-            ) : (
-              <CgDetailsLess className="text-lg" title={t('proxies.mode.simple')} />
-            )}
-          </Button>
-        </>
+            <DropdownSection title={t('proxies.settings.visibility')} showDivider>
+              <DropdownItem
+                key="show-hidden"
+                startContent={<MdFilterAlt className="text-lg" />}
+                endContent={showHidden ? <MdCheck className="text-lg text-primary" /> : null}
+              >
+                {t(showHidden ? 'proxies.hiddenGroups.hide' : 'proxies.hiddenGroups.show')}
+              </DropdownItem>
+              <DropdownItem
+                key="hide-unavailable"
+                startContent={<MdVisibilityOff className="text-lg" />}
+                endContent={
+                  appConfig?.hideUnavailableProxies ? (
+                    <MdCheck className="text-lg text-primary" />
+                  ) : null
+                }
+              >
+                {t(
+                  appConfig?.hideUnavailableProxies
+                    ? 'proxies.hideUnavailable.enabled'
+                    : 'proxies.hideUnavailable.disabled'
+                )}
+              </DropdownItem>
+            </DropdownSection>
+            <DropdownSection title={t('proxies.settings.order')} showDivider>
+              <DropdownItem
+                key="order-default"
+                startContent={<TbCircleLetterD className="text-lg" />}
+                endContent={
+                  proxyDisplayOrder === 'default' ? (
+                    <MdCheck className="text-lg text-primary" />
+                  ) : null
+                }
+              >
+                {t('proxies.order.default')}
+              </DropdownItem>
+              <DropdownItem
+                key="order-delay"
+                startContent={<MdOutlineSpeed className="text-lg" />}
+                endContent={
+                  proxyDisplayOrder === 'delay' ? (
+                    <MdCheck className="text-lg text-primary" />
+                  ) : null
+                }
+              >
+                {t('proxies.order.delay')}
+              </DropdownItem>
+              <DropdownItem
+                key="order-name"
+                startContent={<RxLetterCaseCapitalize className="text-lg" />}
+                endContent={
+                  proxyDisplayOrder === 'name' ? <MdCheck className="text-lg text-primary" /> : null
+                }
+              >
+                {t('proxies.order.name')}
+              </DropdownItem>
+            </DropdownSection>
+            <DropdownSection title={t('proxies.settings.mode')}>
+              <DropdownItem
+                key="mode-simple"
+                startContent={<CgDetailsLess className="text-lg" />}
+                endContent={
+                  proxyDisplayMode === 'simple' ? (
+                    <MdCheck className="text-lg text-primary" />
+                  ) : null
+                }
+              >
+                {t('proxies.mode.simple')}
+              </DropdownItem>
+              <DropdownItem
+                key="mode-full"
+                startContent={<CgDetailsMore className="text-lg" />}
+                endContent={
+                  proxyDisplayMode === 'full' ? <MdCheck className="text-lg text-primary" /> : null
+                }
+              >
+                {t('proxies.mode.full')}
+              </DropdownItem>
+            </DropdownSection>
+          </DropdownMenu>
+        </Dropdown>
       }
     >
       {mode === 'direct' ? (
