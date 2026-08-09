@@ -36,7 +36,6 @@ interface IpcApi {
   patchMihomoConfig: (patch: Partial<IMihomoConfig>) => Promise<void>
   mihomoSmartGroupWeights: (groupName: string) => Promise<Record<string, number>>
   mihomoSmartFlushCache: (configName?: string) => Promise<void>
-  setMihomoLogsActive: (active: boolean) => Promise<void>
   getSmartOverrideContent: () => Promise<string | null>
   // AutoRun
   checkAutoRun: () => Promise<boolean>
@@ -209,7 +208,6 @@ export const {
   patchMihomoConfig,
   mihomoSmartGroupWeights,
   mihomoSmartFlushCache,
-  setMihomoLogsActive,
   getSmartOverrideContent,
   // AutoRun
   checkAutoRun,
