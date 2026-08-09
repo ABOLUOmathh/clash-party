@@ -12,6 +12,8 @@ import { proxyLogger } from '../utils/logger'
 import { resourcesFilesDir } from '../utils/dirs'
 
 let triggerSysProxyTimer: NodeJS.Timeout | null = null
+let triggerSysProxyQueue: Promise<void> = Promise.resolve()
+let triggerSysProxySequence = 0
 const helperSocketPath = '/tmp/mihomo-party-helper.sock'
 const helperPath = '/Library/PrivilegedHelperTools/party.mihomo.helper'
 const helperPlistPath = '/Library/LaunchDaemons/party.mihomo.helper.plist'
@@ -76,20 +78,36 @@ export async function triggerSysProxy(
   enable: boolean,
   options: TriggerSysProxyOptions = {}
 ): Promise<void> {
+  const sequence = ++triggerSysProxySequence
+
   if (triggerSysProxyTimer) {
     clearTimeout(triggerSysProxyTimer)
     triggerSysProxyTimer = null
   }
-  if (net.isOnline() || options.force) {
-    if (enable) {
-      await disableSysProxy(options.helperTimeout)
-      await enableSysProxy(options.helperTimeout)
-    } else {
-      await disableSysProxy(options.helperTimeout)
+
+  const operation = triggerSysProxyQueue.then(async () => {
+    if (net.isOnline() || options.force) {
+      if (enable) {
+        await disableSysProxy(options.helperTimeout)
+        await enableSysProxy(options.helperTimeout)
+      } else {
+        await disableSysProxy(options.helperTimeout)
+      }
+      return
     }
-  } else {
-    triggerSysProxyTimer = setTimeout(() => triggerSysProxy(enable, options), 5000)
-  }
+
+    if (sequence !== triggerSysProxySequence) return
+    triggerSysProxyTimer = setTimeout(() => {
+      triggerSysProxyTimer = null
+      if (sequence !== triggerSysProxySequence) return
+      void triggerSysProxy(enable, options).catch((error) => {
+        void proxyLogger.error('Failed to retry system proxy', error)
+      })
+    }, 5000)
+  })
+
+  triggerSysProxyQueue = operation.catch(() => {})
+  return operation
 }
 
 async function enableSysProxy(helperTimeout?: number): Promise<void> {
