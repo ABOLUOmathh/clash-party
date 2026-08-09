@@ -197,7 +197,7 @@ export async function generateProfile(
     coreProfile['log-level'] = 'info'
   }
   const coreConfigStr = stringify(coreProfile)
-  if (diffWorkDir) {
+  if (diffWorkDir && options.outputPath === undefined) {
     await prepareProfileWorkDir(profileId)
   }
   await atomicWriteFile(
