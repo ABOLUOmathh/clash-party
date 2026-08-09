@@ -217,9 +217,9 @@ const EditTunnelsModal: React.FC<Props> = (props) => {
       try {
         const content = await getProfileStr(id)
         const parsed = yaml.load(content)
-        // 解析结果不是对象时（例如订阅是 age 加密的，磁盘上存的是密文），
+        // 解析结果不是 YAML mapping 时（例如 age 密文、根数组或日期），
         // 旧实现静默退化成 {} 且不提示，保存就会把整份订阅写没。
-        if (!parsed || typeof parsed !== 'object') {
+        if (Object.prototype.toString.call(parsed) !== '[object Object]') {
           throw new Error('Profile is not a YAML mapping')
         }
         const nextProfile = parsed as ProfileYaml
