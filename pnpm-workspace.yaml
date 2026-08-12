@@ -10,3 +10,4 @@ publicHoistPattern:
 
 shamefullyHoist: true
 virtualStoreDirMaxLength: 80
+verifyDepsBeforeRun: false
