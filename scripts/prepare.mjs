@@ -294,9 +294,7 @@ async function downloadFile(url, path) {
     headers: { 'Content-Type': 'application/octet-stream' }
   })
   if (!response.ok) {
-    throw new Error(
-      `download failed: ${response.status} ${response.statusText} for "${url}"`
-    )
+    throw new Error(`download failed: ${response.status} ${response.statusText} for "${url}"`)
   }
   const buffer = await response.arrayBuffer()
   fs.writeFileSync(path, new Uint8Array(buffer))

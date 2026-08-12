@@ -196,11 +196,15 @@ const ShortcutInput: React.FC<{
       } else if (code.startsWith('Intl')) {
         code = code.substring(4)
       } else if (code.startsWith('Numpad')) {
-        if (key.length === 1) {
-          code = 'Num' + code.substring(6)
-        } else {
-          code = key
-        }
+        // Electron 加速键表只接受 num0-num9/numdec/numadd/numsub/nummult/numdiv，
+        // 解析时整体转小写，'NumSubtract' 这类驼峰名匹配不上会导致注册失败
+        if (code === 'NumpadAdd') code = 'numadd'
+        else if (code === 'NumpadSubtract') code = 'numsub'
+        else if (code === 'NumpadMultiply') code = 'nummult'
+        else if (code === 'NumpadDivide') code = 'numdiv'
+        else if (code === 'NumpadDecimal') code = 'numdec'
+        else if (key.length === 1) code = 'Num' + code.substring(6)
+        else code = key
       } else if (/F\d+/.test(code)) {
         // f1-f12
       } else if (keyMap[code] !== undefined) {
