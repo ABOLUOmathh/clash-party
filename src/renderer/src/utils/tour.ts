@@ -22,7 +22,7 @@ export function createTourDriver(t: TFunction, navigate: NavigateFunction): void
         popover: {
           title: t('guide.welcome.title'),
           description: t('guide.welcome.description'),
-          side: 'over',
+          side: 'top',
           align: 'center'
         }
       },
