@@ -148,10 +148,12 @@ const GeoData: React.FC = () => {
           <Input
             size="sm"
             type="number"
-            className="w-[100px]"
-            value={geoUpdateInterval.toString()}
+            className="w-25"
+            value={(geoUpdateInterval ?? 24).toString()}
             onValueChange={(v) => {
-              patchControledMihomoConfig({ 'geo-update-interval': parseInt(v) })
+              const nextInterval = parseInt(v)
+              if (Number.isNaN(nextInterval)) return
+              patchControledMihomoConfig({ 'geo-update-interval': nextInterval })
             }}
           />
         </SettingItem>
