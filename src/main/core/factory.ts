@@ -302,7 +302,8 @@ async function prepareProfileWorkDir(current: string | undefined): Promise<void>
     copy('geoip.dat'),
     copy('geosite.dat'),
     copy('ASN.mmdb'),
-    copy('BundleMRS.7z')
+    copy('BundleMRS.7z'),
+    copy('Model.bin')
   ])
 }
 
