@@ -819,6 +819,9 @@
   "settings.githubProxy": "GitHub Download Proxy",
   "settings.githubProxy.auto": "Auto (proxy first)",
   "settings.githubProxy.direct": "Direct",
+  "settings.githubProxy.custom": "Custom",
+  "settings.githubProxy.customAddress": "Custom Proxy Address",
+  "settings.githubProxy.customPlaceholder": "https://gh-proxy.example.com",
   "plugins": {
     "title": "Airport Plugins",
     "import": "Import Plugin",

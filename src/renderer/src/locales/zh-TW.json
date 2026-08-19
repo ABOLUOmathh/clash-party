@@ -819,6 +819,9 @@
   "settings.githubProxy": "GitHub 下載代理",
   "settings.githubProxy.auto": "自動（優先代理）",
   "settings.githubProxy.direct": "直連",
+  "settings.githubProxy.custom": "自訂",
+  "settings.githubProxy.customAddress": "自訂代理位址",
+  "settings.githubProxy.customPlaceholder": "https://gh-proxy.example.com",
   "plugins": {
     "title": "機場外掛",
     "import": "匯入外掛",

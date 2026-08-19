@@ -797,6 +797,9 @@
   "settings.githubProxy": "پروکسی دانلود GitHub",
   "settings.githubProxy.auto": "خودکار (پروکسی اول)",
   "settings.githubProxy.direct": "مستقیم",
+  "settings.githubProxy.custom": "سفارشی",
+  "settings.githubProxy.customAddress": "آدرس پروکسی سفارشی",
+  "settings.githubProxy.customPlaceholder": "https://gh-proxy.example.com",
   "plugins": {
     "title": "افزونه‌های سرویس‌دهنده",
     "import": "وارد کردن افزونه",
