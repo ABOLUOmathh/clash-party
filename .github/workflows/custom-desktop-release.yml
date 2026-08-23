@@ -1,0 +1,271 @@
+name: Custom Clash Party Desktop Release
+
+on:
+  push:
+    branches:
+      - feat/custom-mihomo-substore
+    paths:
+      - ".github/workflows/custom-desktop-release.yml"
+      - "scripts/prepare.mjs"
+      - "src/main/resolve/server.ts"
+      - "electron-builder.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: custom-clash-party-desktop-release
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows ${{ matrix.arch }}
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - ia32
+          - arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm install
+
+      - name: Set dev version
+        env:
+          GITHUB_EVENT_NAME: workflow_dispatch
+        run: node scripts/update-version.mjs
+
+      - name: Prepare custom resources
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm prepare --${{ matrix.arch }}
+
+      - name: Build
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm build:win --${{ matrix.arch }}
+
+      - name: Add portable flag
+        shell: pwsh
+        run: |
+          New-Item -Path "PORTABLE" -ItemType File
+          Get-ChildItem dist/*portable.7z | ForEach-Object {
+            7z a $_.FullName PORTABLE
+          }
+
+      - name: Generate checksums
+        run: pnpm checksum setup.exe portable.7z
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: Windows-${{ matrix.arch }}
+          path: |
+            dist/*.sha256
+            dist/*setup.exe
+            dist/*portable.7z
+          if-no-files-found: error
+
+
+  linux:
+    name: Linux ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: |
+          pnpm install
+          sed -i "s/productName: Clash Party/productName: clash-party/" electron-builder.yml
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libarchive-tools
+
+      - name: Set dev version
+        env:
+          GITHUB_EVENT_NAME: workflow_dispatch
+        run: node scripts/update-version.mjs
+
+      - name: Prepare custom resources
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm prepare --${{ matrix.arch }}
+
+      - name: Build
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm build:linux --${{ matrix.arch }}
+
+      - name: Generate checksums
+        run: pnpm checksum .deb .rpm .pkg.tar.zst
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: Linux-${{ matrix.arch }}
+          path: |
+            dist/*.sha256
+            dist/*.deb
+            dist/*.rpm
+            dist/*.pkg.tar.zst
+          if-no-files-found: error
+
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: macos-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm install
+
+      - name: Set dev version
+        env:
+          GITHUB_EVENT_NAME: workflow_dispatch
+        run: node scripts/update-version.mjs
+
+      - name: Prepare custom resources
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm prepare --${{ matrix.arch }}
+
+      - name: Build unsigned package
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          chmod +x build/pkg-scripts/postinstall build/pkg-scripts/preinstall
+          pnpm build:mac --${{ matrix.arch }}
+
+      - name: Generate checksums
+        run: pnpm checksum .pkg
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: macOS-${{ matrix.arch }}
+          path: |
+            dist/*.sha256
+            dist/*.pkg
+          if-no-files-found: error
+
+
+  release:
+    name: Publish custom Clash Party
+    needs:
+      - windows
+      - linux
+      - macos
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Show release files
+        run: |
+          echo "Release files:"
+          ls -lah release
+
+      - name: Remove previous custom release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete custom-socks-ws-client \
+            --repo "${{ github.repository }}" \
+            --yes \
+            --cleanup-tag || true
+
+          git push origin \
+            :refs/tags/custom-socks-ws-client || true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create custom-socks-ws-client \
+            release/* \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "Custom SOCKS5 WebSocket Clash Party" \
+            --prerelease \
+            --notes "Custom Clash Party build using the custom Mihomo SOCKS5-over-WebSocket core and custom Sub-Store GOST SOCKS parser."
