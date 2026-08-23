@@ -88,10 +88,8 @@ async function getLatestSmartVersion() {
 }
 
 /* ======= mihomo release ======= */
-const MIHOMO_VERSION_URL =
-  'https://github.com/MetaCubeX/mihomo/releases/latest/download/version.txt'
-const MIHOMO_URL_PREFIX = `https://github.com/MetaCubeX/mihomo/releases/download`
-let MIHOMO_VERSION
+const CUSTOM_MIHOMO_RELEASE_TAG = 'custom-socks-ws'
+const CUSTOM_MIHOMO_URL_PREFIX = `https://github.com/ABOLUOmathh/mihomo/releases/download/${CUSTOM_MIHOMO_RELEASE_TAG}`
 
 const MIHOMO_MAP = {
   'win32-x64': 'mihomo-windows-amd64-compatible',
@@ -101,21 +99,6 @@ const MIHOMO_MAP = {
   'darwin-arm64': 'mihomo-darwin-arm64',
   'linux-x64': 'mihomo-linux-amd64-compatible',
   'linux-arm64': 'mihomo-linux-arm64'
-}
-
-// Fetch the latest release version from the version.txt file
-async function getLatestReleaseVersion() {
-  try {
-    const response = await fetch(MIHOMO_VERSION_URL, {
-      method: 'GET'
-    })
-    let v = await response.text()
-    MIHOMO_VERSION = v.trim() // Trim to remove extra whitespaces
-    console.log(`Latest release version: ${MIHOMO_VERSION}`)
-  } catch (error) {
-    console.error('Error fetching latest release version:', error.message)
-    process.exit(1)
-  }
 }
 
 /*
@@ -157,9 +140,9 @@ function mihomo() {
   const name = MIHOMO_MAP[`${platform}-${arch}`]
   const isWin = platform === 'win32'
   const urlExt = isWin ? 'zip' : 'gz'
-  const downloadURL = `${MIHOMO_URL_PREFIX}/${MIHOMO_VERSION}/${name}-${MIHOMO_VERSION}.${urlExt}`
+  const downloadURL = `${CUSTOM_MIHOMO_URL_PREFIX}/${name}.${urlExt}`
   const exeFile = `${name}${isWin ? '.exe' : ''}`
-  const zipFile = `${name}-${MIHOMO_VERSION}.${urlExt}`
+  const zipFile = `${name}.${urlExt}`
 
   return {
     name: 'mihomo',
@@ -465,7 +448,7 @@ const resolveSubstore = () =>
   resolveResource({
     file: 'sub-store.bundle.cjs',
     downloadURL:
-      'https://github.com/sub-store-org/Sub-Store/releases/latest/download/sub-store.bundle.js'
+      'https://github.com/ABOLUOmathh/Sub-Store/releases/download/custom-gost-socks-ws/sub-store.bundle.js'
   })
 const resolveHelper = () =>
   resolveResource({
@@ -515,7 +498,7 @@ const tasks = [
   },
   {
     name: 'mihomo',
-    func: () => getLatestReleaseVersion().then(() => resolveSidecar(mihomo())),
+    func: () => resolveSidecar(mihomo()),
     retry: 5
   },
   {
