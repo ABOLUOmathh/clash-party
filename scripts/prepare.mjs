@@ -53,7 +53,7 @@ async function getLatestAlphaVersion() {
     console.log(`Latest alpha version: ${MIHOMO_ALPHA_VERSION}`)
   } catch (error) {
     console.error('Error fetching latest alpha version:', error.message)
-    process.exit(1)
+    throw error
   }
 }
 
@@ -83,7 +83,7 @@ async function getLatestSmartVersion() {
     console.log(`Latest smart version: ${MIHOMO_SMART_VERSION}`)
   } catch (error) {
     console.error('Error fetching latest smart version:', error.message)
-    process.exit(1)
+    throw error
   }
 }
 
@@ -241,11 +241,11 @@ async function resolveSidecar(binInfo) {
       })
     }
   } catch (err) {
-    // 需要删除文件
-    fs.rmSync(sidecarPath)
+    // 下载或解压失败时安全清理；目标文件可能尚未创建。
+    fs.rmSync(sidecarPath, { force: true })
     throw err
   } finally {
-    fs.rmSync(tempDir, { recursive: true })
+    fs.rmSync(tempDir, { recursive: true, force: true })
   }
 }
 
