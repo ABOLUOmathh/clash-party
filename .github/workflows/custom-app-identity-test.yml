@@ -6,6 +6,7 @@ on:
       - feat/custom-app-identity
     paths:
       - '.github/workflows/custom-app-identity-test.yml'
+      - '.gitattributes'
       - 'electron-builder.yml'
       - 'src/main/**'
       - 'scripts/prepare.mjs'
