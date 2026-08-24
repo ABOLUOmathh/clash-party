@@ -415,15 +415,8 @@ async function migration(): Promise<void> {
 }
 
 function initDeeplink(): void {
-  if (process.defaultApp) {
-    if (process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient('clash', process.execPath, [path.resolve(process.argv[1])])
-      app.setAsDefaultProtocolClient('mihomo', process.execPath, [path.resolve(process.argv[1])])
-    }
-  } else {
-    app.setAsDefaultProtocolClient('clash')
-    app.setAsDefaultProtocolClient('mihomo')
-  }
+  // Custom build intentionally leaves clash:// and mihomo://
+  // registered to the upstream Clash Party installation.
 }
 
 export async function initBasic(): Promise<void> {

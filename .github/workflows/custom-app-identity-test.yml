@@ -1,0 +1,122 @@
+name: Custom App Identity Test
+
+on:
+  push:
+    branches:
+      - feat/custom-app-identity
+    paths:
+      - '.github/workflows/custom-app-identity-test.yml'
+      - 'electron-builder.yml'
+      - 'src/main/**'
+      - 'scripts/prepare.mjs'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: custom-app-identity-test
+  cancel-in-progress: true
+
+jobs:
+  windows-x64:
+    name: Windows x64 Identity Test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          npm_config_arch: x64
+          npm_config_target_arch: x64
+        run: pnpm install
+
+      - name: Set dev version
+        env:
+          GITHUB_EVENT_NAME: workflow_dispatch
+        run: node scripts/update-version.mjs
+
+      - name: Prepare custom resources
+        env:
+          npm_config_arch: x64
+          npm_config_target_arch: x64
+        run: pnpm prepare --x64
+
+      - name: Review source
+        run: pnpm run review
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Build Windows x64
+        env:
+          npm_config_arch: x64
+          npm_config_target_arch: x64
+        run: pnpm build:win --x64
+
+      - name: Add portable flag
+        shell: pwsh
+        run: |
+          New-Item -Path "PORTABLE" -ItemType File
+          Get-ChildItem dist/*portable.7z | ForEach-Object {
+            7z a $_.FullName PORTABLE
+          }
+
+      - name: Generate checksums
+        run: pnpm checksum setup.exe portable.7z
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: clash-party-custom-identity-test-windows-x64
+          path: |
+            dist/*.sha256
+            dist/*setup.exe
+            dist/*portable.7z
+          if-no-files-found: error
+
+  publish-test:
+    name: Publish Identity Test Release
+    needs:
+      - windows-x64
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Show files
+        run: ls -lah release
+
+      - name: Remove previous identity test release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete custom-app-identity-test             --repo "${{ github.repository }}"             --yes             --cleanup-tag || true
+
+          git push origin             :refs/tags/custom-app-identity-test || true
+
+      - name: Publish identity test release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create custom-app-identity-test             release/*             --repo "${{ github.repository }}"             --target "${{ github.sha }}"             --title "Clash Party Custom - App Identity Test"             --prerelease             --notes "Experimental Windows x64 build for validating isolated Custom app identity, installer and user-data directory. Do not use as the stable release."

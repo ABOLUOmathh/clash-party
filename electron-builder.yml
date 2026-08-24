@@ -1,5 +1,5 @@
-appId: party.mihomo.app
-productName: Clash Party
+appId: io.github.aboluomathh.clashparty.custom
+productName: Clash Party Custom
 directories:
   buildResources: build
 files:
@@ -20,24 +20,13 @@ asarUnpack:
 extraResources:
   - from: './extra/'
     to: ''
-protocols:
-  name: 'Clash Party URI Scheme'
-  schemes:
-    - 'clash'
-    - 'mihomo'
-fileAssociations:
-  - ext: 'cpx'
-    name: 'Clash Party Plugin'
-    description: 'Clash Party airport plugin descriptor'
-    mimeType: 'application/x-clash-party-plugin'
-    role: 'Viewer'
 win:
   target:
     - nsis
     - 7z
-  artifactName: clash-party-windows-${version}-${arch}-portable.${ext}
+  artifactName: clash-party-custom-windows-${version}-${arch}-portable.${ext}
 nsis:
-  artifactName: clash-party-windows-${version}-${arch}-setup.${ext}
+  artifactName: clash-party-custom-windows-${version}-${arch}-setup.${ext}
   uninstallDisplayName: ${productName}
   allowToChangeInstallationDirectory: true
   oneClick: false
