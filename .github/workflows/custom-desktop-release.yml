@@ -5,12 +5,12 @@ on:
     branches:
       - feat/custom-mihomo-substore
     paths:
-      - ".github/workflows/custom-desktop-release.yml"
-      - "scripts/prepare.mjs"
-      - "src/main/resolve/server.ts"
-      - "electron-builder.yml"
-      - "package.json"
-      - "pnpm-lock.yaml"
+      - '.github/workflows/custom-desktop-release.yml'
+      - 'scripts/prepare.mjs'
+      - 'src/main/resolve/server.ts'
+      - 'electron-builder.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
   workflow_dispatch:
 
 permissions:
@@ -90,7 +90,6 @@ jobs:
             dist/*portable.7z
           if-no-files-found: error
 
-
   linux:
     name: Linux ${{ matrix.arch }}
     runs-on: ubuntu-latest
@@ -159,7 +158,6 @@ jobs:
             dist/*.pkg.tar.zst
           if-no-files-found: error
 
-
   macos:
     name: macOS ${{ matrix.arch }}
     runs-on: macos-latest
@@ -205,7 +203,7 @@ jobs:
         env:
           npm_config_arch: ${{ matrix.arch }}
           npm_config_target_arch: ${{ matrix.arch }}
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
           chmod +x build/pkg-scripts/postinstall build/pkg-scripts/preinstall
           pnpm build:mac --${{ matrix.arch }}
@@ -221,7 +219,6 @@ jobs:
             dist/*.sha256
             dist/*.pkg
           if-no-files-found: error
-
 
   release:
     name: Publish custom Clash Party
