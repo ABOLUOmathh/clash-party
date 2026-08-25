@@ -97,6 +97,7 @@ const validInvokeChannels = [
   'getVersion',
   'platform',
   'fetchMihomoTags',
+  'fetchCustomMihomoTags',
   'installSpecificMihomoCore',
   'clearMihomoVersionCache',
   // Backup

@@ -137,7 +137,14 @@ import { get as httpGet } from './chromeRequest'
 import { getIconDataURL } from './icon'
 import { getAppName } from './appName'
 import { logDir, rulePath } from './dirs'
-import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
+// import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
+import {
+  installMihomoCore,
+  installCustomMihomoCore,
+  getGitHubTags,
+  getGitHubReleases,
+  clearVersionCache
+} from './github'
 import { atomicWriteFile } from './safeFile'
 import { startSubStoreServices } from './init'
 
@@ -177,13 +184,28 @@ async function fetchMihomoTags(
   return await getGitHubTags('MetaCubeX', 'mihomo', forceRefresh)
 }
 
-async function installSpecificMihomoCore(version: string): Promise<void> {
+async function fetchCustomMihomoTags(forceRefresh = false) {
+  return await getGitHubReleases('ABOLUOmathh', 'mihomo', forceRefresh)
+}
+
+async function installSpecificMihomoCore(
+  version: string,
+  source: 'official' | 'custom' = 'official'
+) {
+  if (source === 'custom') {
+    clearVersionCache('ABOLUOmathh', 'mihomo')
+
+    return await installCustomMihomoCore(version)
+  }
+
   clearVersionCache('MetaCubeX', 'mihomo')
+
   return await installMihomoCore(version)
 }
 
 async function clearMihomoVersionCache(): Promise<void> {
   clearVersionCache('MetaCubeX', 'mihomo')
+  clearVersionCache('ABOLUOmathh', 'mihomo')
 }
 
 async function getRuleStr(id: string): Promise<string> {
@@ -317,6 +339,7 @@ const asyncHandlers: Record<string, AsyncFn> = {
   checkUpdate,
   downloadAndInstallUpdate,
   fetchMihomoTags,
+  fetchCustomMihomoTags,
   installSpecificMihomoCore,
   clearMihomoVersionCache,
   // Backup

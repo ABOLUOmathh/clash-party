@@ -110,7 +110,8 @@ interface IpcApi {
   fetchMihomoTags: (
     forceRefresh?: boolean
   ) => Promise<{ name: string; zipball_url: string; tarball_url: string }[]>
-  installSpecificMihomoCore: (version: string) => Promise<void>
+  fetchCustomMihomoTags: (forceRefresh?: boolean) => Promise<unknown>
+  installSpecificMihomoCore: (version: string, source?: 'official' | 'custom') => Promise<void>
   clearMihomoVersionCache: () => Promise<void>
   // Backup
   webdavBackup: () => Promise<boolean>
@@ -279,6 +280,7 @@ export const {
   downloadAndInstallUpdate,
   getVersion,
   fetchMihomoTags,
+  fetchCustomMihomoTags,
   installSpecificMihomoCore,
   clearMihomoVersionCache,
   // Backup

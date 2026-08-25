@@ -41,6 +41,7 @@ import {
   startSubStoreBackendServer,
   triggerSysProxy,
   fetchMihomoTags,
+  fetchCustomMihomoTags,
   installSpecificMihomoCore,
   clearMihomoVersionCache,
   mihomoUpgradeUI
@@ -169,6 +170,7 @@ const Mihomo: React.FC = () => {
   const [lanOpen, setLanOpen] = useState(false)
   const { isOpen, onOpen, onClose } = useDisclosure()
   const [tags, setTags] = useState<{ name: string; zipball_url: string; tarball_url: string }[]>([])
+  const [coreSource, setCoreSource] = useState<'official' | 'custom'>('official')
   const [loadingTags, setLoadingTags] = useState(false)
   const [selectedTag, setSelectedTag] = useState(specificVersion || '')
   const [installing, setInstalling] = useState(false)
@@ -268,7 +270,10 @@ const Mihomo: React.FC = () => {
   const fetchTags = async (forceRefresh = false) => {
     setLoadingTags(true)
     try {
-      const data = await fetchMihomoTags(forceRefresh)
+      const data =
+        coreSource === 'custom'
+          ? await fetchCustomMihomoTags(forceRefresh)
+          : await fetchMihomoTags(forceRefresh)
       setTags(Array.isArray(data) ? data : [])
     } catch (error: unknown) {
       console.error('Failed to fetch tags:', String(error))
@@ -286,8 +291,7 @@ const Mihomo: React.FC = () => {
     setInstalling(true)
     try {
       // 下载并安装特定版本的核心
-      await installSpecificMihomoCore(selectedTag)
-
+      await installSpecificMihomoCore(selectedTag, coreSource)
       // 更新应用配置
       await patchAppConfig({
         core: 'mihomo-specific',
@@ -1507,6 +1511,27 @@ const Mihomo: React.FC = () => {
           <ModalHeader className="flex app-drag">{t('mihomo.selectSpecificVersion')}</ModalHeader>
           <ModalBody>
             <div className="flex flex-col gap-4">
+              <Select
+                label="核心来源"
+                className="w-60"
+                selectedKeys={new Set([coreSource])}
+                onSelectionChange={(v) => {
+                  const source = v.currentKey as 'official' | 'custom'
+
+                  setCoreSource(source)
+
+                  setTags([])
+
+                  setTimeout(() => {
+                    fetchTags(true)
+                  }, 100)
+                }}
+              >
+                <SelectItem key="official">官方 Mihomo</SelectItem>
+
+                <SelectItem key="custom">自定义 Mihomo</SelectItem>
+              </Select>
+
               <div className="flex gap-2">
                 <Input
                   placeholder={t('mihomo.searchVersion')}

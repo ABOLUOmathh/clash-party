@@ -39,6 +39,12 @@ export interface GitHubTag {
   tarball_url: string
 }
 
+interface GitHubRelease {
+  tag_name: string
+  zipball_url: string
+  tarball_url: string
+}
+
 interface VersionCache {
   data: GitHubTag[]
   timestamp: number
@@ -116,6 +122,47 @@ export async function getGitHubTags(
     }
     throw new Error('Failed to fetch version list')
   }
+}
+
+export async function getGitHubReleases(
+  owner: string,
+  repo: string,
+  forceRefresh = false
+): Promise<GitHubTag[]> {
+  const cacheKey = `${owner}/${repo}-releases`
+
+  if (!forceRefresh && versionCache.has(cacheKey)) {
+    const cache = versionCache.get(cacheKey)
+
+    if (cache && Date.now() - cache.timestamp < CACHE_EXPIRY) {
+      return cache.data
+    }
+  }
+
+  const response = await chromeRequest.get<GitHubRelease[]>(
+    `${GITHUB_API_CONFIG.BASE_URL}/repos/${owner}/${repo}/releases`,
+    {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': GITHUB_API_CONFIG.API_VERSION
+      },
+      responseType: 'json',
+      timeout: 10000
+    }
+  )
+
+  const data = response.data.map((release) => ({
+    name: release.tag_name,
+    zipball_url: release.zipball_url,
+    tarball_url: release.tarball_url
+  }))
+
+  versionCache.set(cacheKey, {
+    data,
+    timestamp: Date.now()
+  })
+
+  return data
 }
 
 /**
@@ -280,5 +327,83 @@ export async function installMihomoCore(version: string): Promise<void> {
     throw new Error(
       `Failed to install core: ${error instanceof Error ? error.message : String(error)}`
     )
+  }
+}
+
+export async function installCustomMihomoCore(version: string): Promise<void> {
+  try {
+    log.info(`Installing custom mihomo core version ${version}`)
+
+    const plat = platform()
+    const arch = process.arch
+
+    const key = `${plat}-${arch}`
+    const name = PLATFORM_MAP[key]
+
+    if (!name) {
+      throw new Error(`Unsupported platform "${plat}-${arch}"`)
+    }
+
+    const isWin = plat === 'win32'
+    const urlExt = isWin ? 'zip' : 'gz'
+
+    const downloadURL = `https://github.com/ABOLUOmathh/mihomo/releases/download/${version}/${name}-${version}.${urlExt}`
+
+    const coreDir = mihomoCoreDir()
+
+    const tempFile = join(coreDir, `temp-custom-core.${urlExt}`)
+
+    const targetFile = `mihomo-specific${isWin ? '.exe' : ''}`
+
+    const targetPath = join(coreDir, targetFile)
+
+    if (existsSync(targetPath)) {
+      log.debug('Stopping existing custom mihomo core')
+
+      await stopCore(true)
+    }
+
+    await downloadGitHubAsset(downloadURL, tempFile)
+
+    if (urlExt === 'zip') {
+      const zip = new AdmZip(tempFile)
+
+      const entry = zip.getEntries().find((e) => e.entryName.includes(name))
+
+      if (!entry) {
+        throw new Error(`Executable not found ${name}`)
+      }
+
+      zip.extractEntryTo(entry, coreDir, false, true, false, targetFile)
+    } else {
+      const stagingPath = `${targetPath}.download`
+
+      const readStream = createReadStream(tempFile)
+
+      const writeStream = createWriteStream(stagingPath)
+
+      await new Promise<void>((resolve, reject) => {
+        readStream
+          .pipe(createGunzip())
+          .pipe(writeStream)
+          .on('finish', () => {
+            renameSync(stagingPath, targetPath)
+            resolve()
+          })
+          .on('error', reject)
+      })
+    }
+
+    chmodSync(targetPath, 0o755)
+
+    log.info(`Custom mihomo installed ${targetPath}`)
+  } catch (error) {
+    cleanupTempFile(join(mihomoCoreDir(), 'temp-custom-core.zip'))
+
+    cleanupTempFile(join(mihomoCoreDir(), 'temp-custom-core.gz'))
+
+    log.error('Failed installing custom mihomo', error)
+
+    throw error
   }
 }

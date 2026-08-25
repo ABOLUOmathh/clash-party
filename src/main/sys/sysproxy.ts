@@ -2,7 +2,17 @@ import { promisify } from 'util'
 import { exec, execFile } from 'child_process'
 import fs from 'fs'
 import path from 'path'
-import { triggerAutoProxy, triggerManualProxy } from 'sysproxy-rs'
+let triggerAutoProxy: any
+let triggerManualProxy: any
+
+if (process.platform !== 'linux') {
+  const sysproxy = require('sysproxy-rs')
+  triggerAutoProxy = sysproxy.triggerAutoProxy
+  triggerManualProxy = sysproxy.triggerManualProxy
+} else {
+  triggerAutoProxy = async () => {}
+  triggerManualProxy = async () => {}
+}
 import { net } from 'electron'
 import axios from 'axios'
 import { getAppConfig, getControledMihomoConfig } from '../config'
