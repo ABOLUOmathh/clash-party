@@ -347,7 +347,7 @@ export async function installCustomMihomoCore(version: string): Promise<void> {
     const isWin = plat === 'win32'
     const urlExt = isWin ? 'zip' : 'gz'
 
-    const downloadURL = `https://github.com/ABOLUOmathh/mihomo/releases/download/${version}/${name}-${version}.${urlExt}`
+    const downloadURL = `https://github.com/ABOLUOmathh/mihomo/releases/download/${version}/${name}.${urlExt}`
 
     const coreDir = mihomoCoreDir()
 
