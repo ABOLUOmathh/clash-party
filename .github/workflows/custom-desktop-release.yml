@@ -1,0 +1,309 @@
+name: Custom Clash Party Desktop Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, e.g. 2.0.2-custom.2'
+        required: true
+        default: '2.0.2-custom.2'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: custom-clash-party-desktop-release
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    name: Validate release version
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - name: Validate version
+        id: meta
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-custom\.[0-9]+$ ]]; then
+            echo "Invalid version: $VERSION"
+            echo "Expected format: 2.0.2-custom.2"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+  windows:
+    name: Windows ${{ matrix.arch }}
+    needs: meta
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - ia32
+          - arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm install
+
+      - name: Set release version
+        env:
+          RELEASE_VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version=process.env.RELEASE_VERSION;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');console.log('Release version:',p.version)"
+
+      - name: Prepare custom resources
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm prepare --${{ matrix.arch }}
+
+      - name: Build
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm build:win --${{ matrix.arch }}
+
+      - name: Add portable flag
+        shell: pwsh
+        run: |
+          New-Item -Path "PORTABLE" -ItemType File
+          Get-ChildItem dist/*portable.7z | ForEach-Object {
+            7z a $_.FullName PORTABLE
+          }
+
+      - name: Generate checksums
+        run: pnpm checksum setup.exe portable.7z
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: Windows-${{ matrix.arch }}
+          path: |
+            dist/*.sha256
+            dist/*setup.exe
+            dist/*portable.7z
+          if-no-files-found: error
+
+  linux:
+    name: Linux ${{ matrix.arch }}
+    needs: meta
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm install
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libarchive-tools rpm zstd
+
+      - name: Set release version
+        env:
+          RELEASE_VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version=process.env.RELEASE_VERSION;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');console.log('Release version:',p.version)"
+
+      - name: Prepare custom resources
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm prepare --${{ matrix.arch }}
+
+      - name: Build
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm build:linux --${{ matrix.arch }}
+
+      - name: Generate checksums
+        run: pnpm checksum .deb .rpm .pkg.tar.zst
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: Linux-${{ matrix.arch }}
+          path: |
+            dist/*.sha256
+            dist/*.deb
+            dist/*.rpm
+            dist/*.pkg.tar.zst
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    needs: meta
+    runs-on: macos-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm install
+
+      - name: Set release version
+        env:
+          RELEASE_VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version=process.env.RELEASE_VERSION;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');console.log('Release version:',p.version)"
+
+      - name: Prepare custom resources
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+        run: pnpm prepare --${{ matrix.arch }}
+
+      - name: Build unsigned package
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+          npm_config_target_arch: ${{ matrix.arch }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          chmod +x build/pkg-scripts/postinstall build/pkg-scripts/preinstall
+          pnpm build:mac --${{ matrix.arch }}
+
+      - name: Generate checksums
+        run: pnpm checksum .pkg
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: macOS-${{ matrix.arch }}
+          path: |
+            dist/*.sha256
+            dist/*.pkg
+          if-no-files-found: error
+
+  release:
+    name: Publish Clash Party Custom
+    needs:
+      - meta
+      - windows
+      - linux
+      - macos
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Generate updater metadata
+        env:
+          RELEASE_VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          version = os.environ["RELEASE_VERSION"]
+          changelog = Path("changelog.md").read_text()
+
+          Path("release/latest.yml").write_text(
+              json.dumps(
+                  {
+                      "version": version,
+                      "changelog": changelog
+                  },
+                  ensure_ascii=False,
+                  indent=2
+              )
+          )
+
+          print(f"Generated latest.yml for {version}")
+          PY
+
+      - name: Show release files
+        run: |
+          echo "Release files:"
+          ls -lah release
+          echo
+          echo "Updater metadata:"
+          cat release/latest.yml
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.meta.outputs.tag }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            release/* \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "Clash Party Custom $RELEASE_TAG" \
+            --notes "Clash Party Custom release with custom Mihomo SOCKS5-over-WebSocket support and custom Sub-Store integration."
