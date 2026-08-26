@@ -151,9 +151,9 @@ async function installUpdate(version: string): Promise<void> {
     await Promise.all([getControledMihomoConfig(), getAppConfig()])
   const githubBase = `https://github.com/ABOLUOmathh/clash-party/releases/download/v${version}/`
   const fileMap = {
-    'win32-x64': `clash-party-windows-${version}-x64-setup.exe`,
-    'win32-ia32': `clash-party-windows-${version}-ia32-setup.exe`,
-    'win32-arm64': `clash-party-windows-${version}-arm64-setup.exe`,
+    'win32-x64': `clash-party-custom-windows-${version}-x64-setup.exe`,
+    'win32-ia32': `clash-party-custom-windows-${version}-ia32-setup.exe`,
+    'win32-arm64': `clash-party-custom-windows-${version}-arm64-setup.exe`,
     'darwin-x64': `clash-party-macos-${version}-x64.pkg`,
     'darwin-arm64': `clash-party-macos-${version}-arm64.pkg`
   }
