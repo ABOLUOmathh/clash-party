@@ -398,12 +398,11 @@ export async function installCustomMihomoCore(version: string): Promise<void> {
 
     log.info(`Custom mihomo installed ${targetPath}`)
   } catch (error) {
-    cleanupTempFile(join(mihomoCoreDir(), 'temp-custom-core.zip'))
-
-    cleanupTempFile(join(mihomoCoreDir(), 'temp-custom-core.gz'))
-
     log.error('Failed installing custom mihomo', error)
 
     throw error
+  } finally {
+    cleanupTempFile(join(mihomoCoreDir(), 'temp-custom-core.zip'))
+    cleanupTempFile(join(mihomoCoreDir(), 'temp-custom-core.gz'))
   }
 }

@@ -267,11 +267,11 @@ const Mihomo: React.FC = () => {
   }
 
   // 获取 GitHub 标签列表（带缓存）
-  const fetchTags = async (forceRefresh = false) => {
+  const fetchTags = async (forceRefresh = false, source: 'official' | 'custom' = coreSource) => {
     setLoadingTags(true)
     try {
       const data =
-        coreSource === 'custom'
+        source === 'custom'
           ? await fetchCustomMihomoTags(forceRefresh)
           : await fetchMihomoTags(forceRefresh)
       setTags(Array.isArray(data) ? data : [])
@@ -1519,12 +1519,10 @@ const Mihomo: React.FC = () => {
                   const source = v.currentKey as 'official' | 'custom'
 
                   setCoreSource(source)
-
+                  setSelectedTag('')
                   setTags([])
 
-                  setTimeout(() => {
-                    fetchTags(true)
-                  }, 100)
+                  void fetchTags(true, source)
                 }}
               >
                 <SelectItem key="official">官方 Mihomo</SelectItem>
