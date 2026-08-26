@@ -2,21 +2,7 @@ import { promisify } from 'util'
 import { exec, execFile } from 'child_process'
 import fs from 'fs'
 import path from 'path'
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let triggerAutoProxy: any
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let triggerManualProxy: any
-
-if (process.platform !== 'linux') {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const sysproxy = require('sysproxy-rs')
-  triggerAutoProxy = sysproxy.triggerAutoProxy
-  triggerManualProxy = sysproxy.triggerManualProxy
-} else {
-  triggerAutoProxy = async () => {}
-  triggerManualProxy = async () => {}
-}
+import { triggerAutoProxy, triggerManualProxy } from 'sysproxy-rs'
 import { net } from 'electron'
 import axios from 'axios'
 import { getAppConfig, getControledMihomoConfig } from '../config'
