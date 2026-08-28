@@ -151,9 +151,9 @@ async function installUpdate(version: string): Promise<void> {
     await Promise.all([getControledMihomoConfig(), getAppConfig()])
   const githubBase = `https://github.com/ABOLUOmathh/clash-party/releases/download/v${version}/`
   const fileMap = {
-    'win32-x64': `clash-party-custom-windows-${version}-x64-setup.exe`,
-    'win32-ia32': `clash-party-custom-windows-${version}-ia32-setup.exe`,
-    'win32-arm64': `clash-party-custom-windows-${version}-arm64-setup.exe`,
+    'win32-x64': `ClashParty-win-${version}-x64-setup.exe`,
+    'win32-ia32': `ClashParty-win-${version}-ia32-setup.exe`,
+    'win32-arm64': `ClashParty-win-${version}-arm64-setup.exe`,
     'darwin-x64': `clash-party-macos-${version}-x64.pkg`,
     'darwin-arm64': `clash-party-macos-${version}-arm64.pkg`
   }
@@ -165,7 +165,7 @@ async function installUpdate(version: string): Promise<void> {
     throw new Error(i18next.t('common.error.autoUpdateNotSupported'))
   }
   if (process.platform === 'win32' && parseInt(os.release()) < 10) {
-    file = file.replace('windows', 'win7')
+    file = file.replace('-win-', '-win7-')
   }
   if (process.platform === 'darwin') {
     const productVersion = execSync('sw_vers -productVersion', { encoding: 'utf8' })

@@ -76,6 +76,28 @@ jobs:
             7z a $_.FullName PORTABLE
           }
 
+      - name: Simplify test asset names
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist/*setup.exe
+          $portable = Get-ChildItem dist/*portable.7z
+
+          if ($setup.Count -ne 1) {
+            throw "Expected exactly one Windows setup asset, found $($setup.Count)"
+          }
+
+          if ($portable.Count -ne 1) {
+            throw "Expected exactly one Windows portable asset, found $($portable.Count)"
+          }
+
+          Rename-Item `
+            -Path $setup.FullName `
+            -NewName "ClashParty-Test-x64-setup.exe"
+
+          Rename-Item `
+            -Path $portable.FullName `
+            -NewName "ClashParty-Test-x64-portable.7z"
+
       - name: Generate checksums
         run: pnpm checksum setup.exe portable.7z
 
@@ -120,4 +142,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create custom-app-identity-test             release/*             --repo "${{ github.repository }}"             --target "${{ github.sha }}"             --title "Clash Party Custom - App Identity Test"             --prerelease             --notes "Experimental Windows x64 build for validating isolated Custom app identity, installer and user-data directory. Do not use as the stable release."
+          gh release create custom-app-identity-test             release/*             --repo "${{ github.repository }}"             --target "${{ github.sha }}"             --title "Clash Party Custom Test"             --prerelease             --notes "Experimental Windows x64 build for validating isolated Custom app identity, installer and user-data directory. Do not use as the stable release."

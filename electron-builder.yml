@@ -24,9 +24,9 @@ win:
   target:
     - nsis
     - 7z
-  artifactName: clash-party-custom-windows-${version}-${arch}-portable.${ext}
+  artifactName: ClashParty-win-${version}-${arch}-portable.${ext}
 nsis:
-  artifactName: clash-party-custom-windows-${version}-${arch}-setup.${ext}
+  artifactName: ClashParty-win-${version}-${arch}-setup.${ext}
   uninstallDisplayName: ${productName}
   allowToChangeInstallationDirectory: true
   oneClick: false
