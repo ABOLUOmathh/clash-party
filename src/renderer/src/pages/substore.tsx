@@ -5,10 +5,6 @@ import {
   ensureSubStoreServices,
   subStoreFrontendPort,
   subStorePort,
-  startSubStoreFrontendServer,
-  startSubStoreBackendServer,
-  stopSubStoreFrontendServer,
-  stopSubStoreBackendServer,
   downloadSubStore
 } from '@renderer/utils/ipc'
 import React, { useEffect, useState } from 'react'
@@ -59,12 +55,8 @@ const SubStore: React.FC = () => {
                   new Notification(t('substore.reinstalling'))
                   setIsUpdating(true)
                   await downloadSubStore()
-                  await stopSubStoreBackendServer()
-                  await startSubStoreBackendServer()
                   await new Promise((resolve) => setTimeout(resolve, 1000))
                   setFrontendPort(0)
-                  await stopSubStoreFrontendServer()
-                  await startSubStoreFrontendServer()
                   await getPort(false)
                   new Notification(t('substore.reinstallCompleted'))
                 } catch (e) {
