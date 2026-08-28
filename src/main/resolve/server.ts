@@ -18,8 +18,8 @@ import { DEFAULT_MIHOMO_PORTS, DEFAULT_USE_SUB_STORE } from '../../shared/appCon
 export let pacPort: number
 export let subStorePort: number
 export let subStoreFrontendPort: number
-let subStoreFrontendServer: http.Server
-let subStoreBackendWorker: Worker
+let subStoreFrontendServer: http.Server | undefined
+let subStoreBackendWorker: Worker | undefined
 
 const defaultPacScript = `
 function FindProxyForURL(url, host) {
@@ -109,9 +109,22 @@ export async function startSubStoreFrontendServer(): Promise<void> {
 }
 
 export async function stopSubStoreFrontendServer(): Promise<void> {
-  if (subStoreFrontendServer) {
-    subStoreFrontendServer.close()
+  const server = subStoreFrontendServer
+  subStoreFrontendServer = undefined
+
+  if (!server || !server.listening) {
+    return
   }
+
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error)
+      } else {
+        resolve()
+      }
+    })
+  })
 }
 
 export async function startSubStoreBackendServer(): Promise<void> {
@@ -161,8 +174,11 @@ export async function startSubStoreBackendServer(): Promise<void> {
 }
 
 export async function stopSubStoreBackendServer(): Promise<void> {
-  if (subStoreBackendWorker) {
-    subStoreBackendWorker.terminate()
+  const worker = subStoreBackendWorker
+  subStoreBackendWorker = undefined
+
+  if (worker) {
+    await worker.terminate()
   }
 }
 
