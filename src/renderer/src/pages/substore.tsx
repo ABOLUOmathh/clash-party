@@ -48,7 +48,7 @@ const SubStore: React.FC = () => {
         header={
           <div className="flex gap-2">
             <Button
-              title={t('substore.checkUpdate')}
+              title={t('substore.reinstall')}
               isIconOnly
               size="sm"
               className="app-nodrag"
@@ -56,7 +56,7 @@ const SubStore: React.FC = () => {
               isLoading={isUpdating}
               onPress={async () => {
                 try {
-                  new Notification(t('substore.updating'))
+                  new Notification(t('substore.reinstalling'))
                   setIsUpdating(true)
                   await downloadSubStore()
                   await stopSubStoreBackendServer()
@@ -66,9 +66,9 @@ const SubStore: React.FC = () => {
                   await stopSubStoreFrontendServer()
                   await startSubStoreFrontendServer()
                   await getPort(false)
-                  new Notification(t('substore.updateCompleted'))
+                  new Notification(t('substore.reinstallCompleted'))
                 } catch (e) {
-                  new Notification(`${t('substore.updateFailed')}: ${e}`)
+                  new Notification(`${t('substore.reinstallFailed')}: ${e}`)
                 } finally {
                   setIsUpdating(false)
                 }
