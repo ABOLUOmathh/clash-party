@@ -182,7 +182,7 @@ export async function downloadSubStore(): Promise<void> {
     // 下载后端文件
     const tempBackendPath = path.join(tempDir, 'sub-store.bundle.cjs')
     const backendRes = await chromeRequest.get(
-      'https://github.com/ABOLUOmathh/Sub-Store/releases/download/custom-gost-socks-ws/sub-store.bundle.js',
+      'https://github.com/ABOLUOmathh/Sub-Store/releases/download/2.36.40-custom.1/sub-store.bundle.js',
       {
         responseType: 'arraybuffer',
         headers: { 'Content-Type': 'application/octet-stream' },
@@ -196,7 +196,7 @@ export async function downloadSubStore(): Promise<void> {
     await writeFile(tempBackendPath, Buffer.from(backendRes.data as Buffer))
     // 下载前端文件
     const frontendRes = await chromeRequest.get(
-      'https://github.com/sub-store-org/Sub-Store-Front-End/releases/latest/download/dist.zip',
+      'https://github.com/sub-store-org/Sub-Store-Front-End/releases/download/2.29.10/dist.zip',
       {
         responseType: 'arraybuffer',
         headers: { 'Content-Type': 'application/octet-stream' },
