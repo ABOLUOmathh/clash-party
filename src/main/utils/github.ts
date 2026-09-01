@@ -171,10 +171,15 @@ export async function getGitHubReleases(
  * @param repo 仓库名称
  */
 export function clearVersionCache(owner: string, repo: string): void {
-  const cacheKey = `${owner}/${repo}`
-  const hasCache = versionCache.has(cacheKey)
-  versionCache.delete(cacheKey)
-  log.debug(`Cache ${hasCache ? 'cleared' : 'not found'} for ${owner}/${repo}`)
+  const tagCacheKey = `${owner}/${repo}`
+  const releaseCacheKey = `${owner}/${repo}-releases`
+
+  const clearedTags = versionCache.delete(tagCacheKey)
+  const clearedReleases = versionCache.delete(releaseCacheKey)
+
+  log.debug(
+    `Cache ${clearedTags || clearedReleases ? 'cleared' : 'not found'} for ${owner}/${repo}`
+  )
 }
 
 /**

@@ -328,15 +328,21 @@ const Mihomo: React.FC = () => {
 
   // 打开模态框时获取标签
   const handleOpenModal = async () => {
+    const source: 'official' | 'custom' =
+      core === 'mihomo' || (core === 'mihomo-specific' && specificVersion?.includes('-custom.'))
+        ? 'custom'
+        : 'official'
+
+    setCoreSource(source)
+    setTags([])
     onOpen()
-    // 先显示缓存的标签（如果有）
-    if (tags.length === 0) {
-      await fetchTags(false) // 使用缓存
-    }
+
+    // 始终按当前来源读取标签；fetchTags 内部已有版本缓存。
+    await fetchTags(false, source)
 
     // 在后台检查更新
     setTimeout(() => {
-      fetchTags(true) // 强制刷新
+      void fetchTags(true, source)
     }, 100)
   }
 
@@ -347,10 +353,14 @@ const Mihomo: React.FC = () => {
 
   // 当模态框打开时，确保选中当前版本
   useEffect(() => {
-    if (isOpen && specificVersion) {
+    if (!isOpen) return
+
+    if (core === 'mihomo-specific' && specificVersion) {
       setSelectedTag(specificVersion)
+    } else {
+      setSelectedTag('')
     }
-  }, [isOpen, specificVersion])
+  }, [isOpen, core, specificVersion])
 
   return (
     <>
@@ -430,6 +440,15 @@ const Mihomo: React.FC = () => {
                     variant="light"
                     isLoading={upgrading}
                     onPress={async () => {
+                      const isCustomCore =
+                        core === 'mihomo' ||
+                        (core === 'mihomo-specific' && specificVersion?.includes('-custom.'))
+
+                      if (isCustomCore) {
+                        await handleOpenModal()
+                        return
+                      }
+
                       try {
                         setUpgrading(true)
                         await mihomoUpgrade()

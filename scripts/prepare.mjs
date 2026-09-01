@@ -88,7 +88,7 @@ async function getLatestSmartVersion() {
 }
 
 /* ======= mihomo release ======= */
-const CUSTOM_MIHOMO_RELEASE_TAG = 'v1.19.30-custom.1'
+const CUSTOM_MIHOMO_RELEASE_TAG = 'v1.19.30-custom.2'
 const CUSTOM_MIHOMO_URL_PREFIX = `https://github.com/ABOLUOmathh/mihomo/releases/download/${CUSTOM_MIHOMO_RELEASE_TAG}`
 
 const MIHOMO_MAP = {
