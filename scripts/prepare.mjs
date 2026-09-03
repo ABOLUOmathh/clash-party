@@ -140,9 +140,9 @@ function mihomo() {
   const name = MIHOMO_MAP[`${platform}-${arch}`]
   const isWin = platform === 'win32'
   const urlExt = isWin ? 'zip' : 'gz'
-  const downloadURL = `${CUSTOM_MIHOMO_URL_PREFIX}/${name}.${urlExt}`
+  const downloadURL = `${CUSTOM_MIHOMO_URL_PREFIX}/${name}-${CUSTOM_MIHOMO_RELEASE_TAG}.${urlExt}`
   const exeFile = `${name}${isWin ? '.exe' : ''}`
-  const zipFile = `${name}.${urlExt}`
+  const zipFile = `${name}-${CUSTOM_MIHOMO_RELEASE_TAG}.${urlExt}`
 
   return {
     name: 'mihomo',
