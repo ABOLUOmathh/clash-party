@@ -1,3 +1,14 @@
+# 2.0.2-custom.5
+
+## 自定义组件同步
+
+- 内置 Mihomo 更新至 `v1.19.30-custom.4`
+- 支持 HeySocks XHTTP `e: true` 实际节点配置
+- 保留 HeySocks XHTTP TCP 与 UOT v0/v1/v2 支持
+- Custom Sub-Store 更新至 `2.37.0-custom.2`
+- Sub-Store 支持 HeySocks XHTTP 分享链接解析与 Mihomo 配置输出
+- 保留 BLACKSTONE、SOCKS5-over-WebSocket 与 Custom 内核升级保护
+
 # 2.0.2-custom.4
 
 ## 自定义内核同步
