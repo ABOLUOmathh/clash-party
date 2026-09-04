@@ -1,3 +1,14 @@
+# 2.0.2-custom.6
+
+## Custom Mihomo 运行时版本与组件同步
+
+- 修复 Custom Mihomo 指定版本运行时下载安装，资产名称与 `ABOLUOmathh/mihomo` Releases 保持一致
+- 支持在 Clash Party 内选择并安装 Custom Mihomo Release 版本
+- 内置 Mihomo 保持 `v1.19.30-custom.4`
+- Custom Sub-Store 更新至 `2.37.0-custom.3`
+- 包含 Trojan URI fragment 名称保留与 Taiwan 国旗识别修复
+- 保留 HeySocks XHTTP、BLACKSTONE 与既有 Custom 内核兼容能力
+
 # 2.0.2-custom.5
 
 ## 自定义组件同步

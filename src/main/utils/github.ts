@@ -352,7 +352,7 @@ export async function installCustomMihomoCore(version: string): Promise<void> {
     const isWin = plat === 'win32'
     const urlExt = isWin ? 'zip' : 'gz'
 
-    const downloadURL = `https://github.com/ABOLUOmathh/mihomo/releases/download/${version}/${name}.${urlExt}`
+    const downloadURL = `https://github.com/ABOLUOmathh/mihomo/releases/download/${version}/${name}-${version}.${urlExt}`
 
     const coreDir = mihomoCoreDir()
 
@@ -361,12 +361,6 @@ export async function installCustomMihomoCore(version: string): Promise<void> {
     const targetFile = `mihomo-specific${isWin ? '.exe' : ''}`
 
     const targetPath = join(coreDir, targetFile)
-
-    if (existsSync(targetPath)) {
-      log.debug('Stopping existing custom mihomo core')
-
-      await stopCore(true)
-    }
 
     await downloadGitHubAsset(downloadURL, tempFile)
 
@@ -379,27 +373,59 @@ export async function installCustomMihomoCore(version: string): Promise<void> {
         throw new Error(`Executable not found ${name}`)
       }
 
+      if (existsSync(targetPath)) {
+        log.debug('Stopping existing custom mihomo core')
+        await stopCore(true)
+      }
+
       zip.extractEntryTo(entry, coreDir, false, true, false, targetFile)
     } else {
       const stagingPath = `${targetPath}.download`
-
       const readStream = createReadStream(tempFile)
-
       const writeStream = createWriteStream(stagingPath)
 
-      await new Promise<void>((resolve, reject) => {
-        readStream
-          .pipe(createGunzip())
-          .pipe(writeStream)
-          .on('finish', () => {
-            renameSync(stagingPath, targetPath)
-            resolve()
-          })
-          .on('error', reject)
-      })
-    }
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const gunzip = createGunzip()
 
-    chmodSync(targetPath, 0o755)
+          const onError = (error: Error): void => {
+            log.error('Custom Mihomo gzip decompression failed', error)
+            readStream.destroy()
+            gunzip.destroy()
+            writeStream.destroy()
+            reject(new Error(`Custom Mihomo gzip decompression failed: ${error.message}`))
+          }
+
+          readStream.on('error', onError)
+          gunzip.on('error', onError)
+          writeStream.on('error', onError)
+
+          readStream
+            .pipe(gunzip)
+            .pipe(writeStream)
+            .on('finish', () => {
+              resolve()
+            })
+        })
+
+        chmodSync(stagingPath, 0o755)
+
+        if (existsSync(targetPath)) {
+          log.debug('Stopping existing custom mihomo core')
+          await stopCore(true)
+        }
+
+        renameSync(stagingPath, targetPath)
+      } catch (error) {
+        try {
+          if (existsSync(stagingPath)) rmSync(stagingPath)
+        } catch {
+          // ignore cleanup failure
+        }
+
+        throw error
+      }
+    }
 
     log.info(`Custom mihomo installed ${targetPath}`)
   } catch (error) {

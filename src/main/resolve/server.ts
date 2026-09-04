@@ -354,7 +354,7 @@ export async function downloadSubStore(): Promise<void> {
     mkdirSync(stagingDir, { recursive: true })
 
     const backendRes = await chromeRequest.get(
-      'https://github.com/ABOLUOmathh/Sub-Store/releases/download/2.37.0-custom.2/sub-store.bundle.js',
+      'https://github.com/ABOLUOmathh/Sub-Store/releases/download/2.37.0-custom.3/sub-store.bundle.js',
       {
         responseType: 'arraybuffer',
         headers: { 'Content-Type': 'application/octet-stream' },

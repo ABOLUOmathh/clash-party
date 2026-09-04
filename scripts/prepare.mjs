@@ -448,7 +448,7 @@ const resolveSubstore = () =>
   resolveResource({
     file: 'sub-store.bundle.cjs',
     downloadURL:
-      'https://github.com/ABOLUOmathh/Sub-Store/releases/download/2.37.0-custom.2/sub-store.bundle.js'
+      'https://github.com/ABOLUOmathh/Sub-Store/releases/download/2.37.0-custom.3/sub-store.bundle.js'
   })
 const resolveHelper = () =>
   resolveResource({
