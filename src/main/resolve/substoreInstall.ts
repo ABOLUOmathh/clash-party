@@ -15,7 +15,16 @@ export interface SubStoreBackupState {
   hadFrontend: boolean
 }
 
-function backupBackendPath(paths: SubStoreComponentPaths): string {
+export type SubStoreBackendComponentPaths = Pick<
+  SubStoreComponentPaths,
+  'backendPath' | 'stagingBackendPath' | 'backupDir'
+>
+
+export interface SubStoreBackendBackupState {
+  hadBackend: boolean
+}
+
+function backupBackendPath(paths: SubStoreBackendComponentPaths): string {
   return path.join(paths.backupDir, 'sub-store.bundle.cjs')
 }
 
@@ -37,6 +46,60 @@ export async function validateSubStoreStaging(
 ): Promise<void> {
   await assertNonEmptyFile(stagingBackendPath, 'Sub-Store backend')
   await assertNonEmptyFile(path.join(stagingFrontendDir, 'index.html'), 'Sub-Store frontend index')
+}
+
+export async function validateSubStoreBackendStaging(stagingBackendPath: string): Promise<void> {
+  await assertNonEmptyFile(stagingBackendPath, 'Sub-Store backend')
+}
+
+export async function restoreSubStoreBackend(
+  paths: SubStoreBackendComponentPaths,
+  state: SubStoreBackendBackupState
+): Promise<void> {
+  await rm(paths.backendPath, { force: true })
+
+  if (state.hadBackend) {
+    const backupBackend = backupBackendPath(paths)
+
+    if (!existsSync(backupBackend)) {
+      throw new Error(`Sub-Store backend backup is missing: ${backupBackend}`)
+    }
+
+    await cp(backupBackend, paths.backendPath)
+  }
+}
+
+export async function replaceSubStoreBackend(
+  paths: SubStoreBackendComponentPaths
+): Promise<SubStoreBackendBackupState> {
+  const state: SubStoreBackendBackupState = {
+    hadBackend: existsSync(paths.backendPath)
+  }
+
+  await rm(paths.backupDir, { recursive: true, force: true })
+  await mkdir(paths.backupDir, { recursive: true })
+
+  if (state.hadBackend) {
+    await cp(paths.backendPath, backupBackendPath(paths))
+  }
+
+  try {
+    await rm(paths.backendPath, { force: true })
+    await rename(paths.stagingBackendPath, paths.backendPath)
+
+    return state
+  } catch (error) {
+    try {
+      await restoreSubStoreBackend(paths, state)
+    } catch (restoreError) {
+      throw new AggregateError(
+        [error, restoreError],
+        'Failed to replace Sub-Store backend and rollback also failed'
+      )
+    }
+
+    throw error
+  }
 }
 
 export async function restoreSubStoreComponents(

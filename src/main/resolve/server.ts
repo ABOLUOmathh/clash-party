@@ -1,6 +1,6 @@
 import { Worker } from 'worker_threads'
 import { mkdirSync } from 'fs'
-import { writeFile, rm } from 'fs/promises'
+import { readFile, writeFile, rm } from 'fs/promises'
 import http from 'http'
 import net from 'net'
 import path from 'path'
@@ -15,10 +15,26 @@ import { proxyLogger, systemLogger } from '../utils/logger'
 import { createCappedLogWritableStream } from '../utils/logFile'
 import { DEFAULT_MIHOMO_PORTS, DEFAULT_USE_SUB_STORE } from '../../shared/appConfig'
 import {
+  SUBSTORE_RUNTIME_ASSET,
+  SUBSTORE_RUNTIME_REPO,
+  getSubStoreBackendChecksum,
+  parseSubStoreReleaseManifest,
+  readSubStoreRuntimeState,
+  removeSubStoreRuntimeState,
+  verifySubStoreBackendChecksum,
+  writeSubStoreRuntimeState
+} from './substoreRuntime'
+import { downloadGitHubAsset, getGitHubReleases } from '../utils/github'
+import {
   cleanupSubStoreBackup,
+  replaceSubStoreBackend,
   replaceSubStoreComponents,
+  restoreSubStoreBackend,
   restoreSubStoreComponents,
+  validateSubStoreBackendStaging,
   validateSubStoreStaging,
+  type SubStoreBackendBackupState,
+  type SubStoreBackendComponentPaths,
   type SubStoreBackupState,
   type SubStoreComponentPaths
 } from './substoreInstall'
@@ -314,6 +330,175 @@ export async function stopSubStoreBackendServer(): Promise<void> {
 
   if (worker) {
     await worker.terminate()
+  }
+}
+
+const CUSTOM_SUBSTORE_OWNER = 'ABOLUOmathh'
+const CUSTOM_SUBSTORE_REPOSITORY = 'Sub-Store'
+const CUSTOM_SUBSTORE_VERSION_PATTERN = /^\d+\.\d+\.\d+-custom\.\d+$/
+
+export async function fetchCustomSubStoreReleases(forceRefresh = false): Promise<string[]> {
+  const releases = await getGitHubReleases(
+    CUSTOM_SUBSTORE_OWNER,
+    CUSTOM_SUBSTORE_REPOSITORY,
+    forceRefresh
+  )
+
+  return releases
+    .map((release) => release.name)
+    .filter((version) => CUSTOM_SUBSTORE_VERSION_PATTERN.test(version))
+}
+
+export async function installCustomSubStoreRuntime(version: string): Promise<void> {
+  if (!CUSTOM_SUBSTORE_VERSION_PATTERN.test(version)) {
+    throw new Error(`Invalid Custom Sub-Store version: ${version}`)
+  }
+
+  const { useSubStore = DEFAULT_USE_SUB_STORE, useCustomSubStore = false } = await getAppConfig()
+
+  if (!useSubStore) {
+    throw new Error('Sub-Store must be enabled before installing a runtime backend')
+  }
+
+  if (useCustomSubStore) {
+    throw new Error(
+      'Disable the external Custom Sub-Store backend before installing a local runtime backend'
+    )
+  }
+
+  const workDir = mihomoWorkDir()
+  const backendPath = path.join(workDir, 'sub-store.bundle.cjs')
+
+  const stagingDir = path.join(workDir, '.substore-runtime-staging')
+  const stagingBackendPath = path.join(stagingDir, 'sub-store.bundle.cjs')
+  const manifestPath = path.join(stagingDir, 'release-manifest.json')
+  const checksumsPath = path.join(stagingDir, 'checksums.txt')
+  const backupDir = path.join(workDir, '.substore-runtime-backup')
+
+  const componentPaths: SubStoreBackendComponentPaths = {
+    backendPath,
+    stagingBackendPath,
+    backupDir
+  }
+
+  const previousRuntimeState = await readSubStoreRuntimeState(workDir)
+
+  let backupState: SubStoreBackendBackupState | undefined
+  let backendReplaced = false
+  let servicesNeedRestart = false
+
+  const releaseBase =
+    `https://github.com/${CUSTOM_SUBSTORE_OWNER}/${CUSTOM_SUBSTORE_REPOSITORY}` +
+    `/releases/download/${version}`
+
+  try {
+    // Phase 1:
+    // 下载和完整性验证期间，当前 Sub-Store backend 保持运行。
+    await rm(stagingDir, { recursive: true, force: true })
+    mkdirSync(stagingDir, { recursive: true })
+
+    await downloadGitHubAsset(`${releaseBase}/release-manifest.json`, manifestPath)
+
+    await downloadGitHubAsset(`${releaseBase}/checksums.txt`, checksumsPath)
+
+    const manifest = parseSubStoreReleaseManifest(await readFile(manifestPath, 'utf8'), version)
+
+    const expectedBackendSha256 = getSubStoreBackendChecksum(await readFile(checksumsPath, 'utf8'))
+
+    await downloadGitHubAsset(`${releaseBase}/${SUBSTORE_RUNTIME_ASSET}`, stagingBackendPath)
+
+    const stagedBackend = await readFile(stagingBackendPath)
+
+    verifySubStoreBackendChecksum(stagedBackend, expectedBackendSha256)
+
+    await validateSubStoreBackendStaging(stagingBackendPath)
+
+    // Phase 2:
+    // 所有网络请求和校验成功后才停止旧 backend。
+    servicesNeedRestart = true
+
+    await stopSubStoreBackendServer()
+
+    // Phase 3:
+    // 只切换 backend，frontend 完全不动。
+    backupState = await replaceSubStoreBackend(componentPaths)
+    backendReplaced = true
+
+    // Phase 4:
+    // 新 backend 必须实际通过现有 readiness check。
+    await startSubStoreBackendServer()
+
+    // Phase 5:
+    // 新 backend 成功运行后才提交 runtime marker。
+    await writeSubStoreRuntimeState(workDir, {
+      version,
+      source: SUBSTORE_RUNTIME_REPO,
+      asset: SUBSTORE_RUNTIME_ASSET,
+      sha256: expectedBackendSha256,
+      sourceCommit: manifest.sourceCommit
+    })
+
+    servicesNeedRestart = false
+
+    try {
+      await cleanupSubStoreBackup(backupDir)
+    } catch (cleanupError) {
+      await systemLogger.error('Failed to clean up Sub-Store runtime backup', cleanupError)
+    }
+  } catch (error) {
+    const recoveryErrors: unknown[] = []
+
+    if (servicesNeedRestart) {
+      try {
+        await stopSubStoreBackendServer()
+      } catch (candidate) {
+        recoveryErrors.push(candidate)
+      }
+
+      if (backendReplaced && backupState) {
+        try {
+          await restoreSubStoreBackend(componentPaths, backupState)
+        } catch (candidate) {
+          recoveryErrors.push(candidate)
+        }
+      }
+
+      // 恢复安装前的 runtime marker。
+      // 如果安装前没有有效 marker，则确保失败安装不会留下新 marker。
+      try {
+        if (previousRuntimeState) {
+          await writeSubStoreRuntimeState(workDir, previousRuntimeState)
+        } else {
+          await removeSubStoreRuntimeState(workDir)
+        }
+      } catch (candidate) {
+        recoveryErrors.push(candidate)
+      }
+
+      // 即使 marker 恢复失败，也继续尝试恢复旧 backend 服务。
+      try {
+        await startSubStoreBackendServer()
+      } catch (candidate) {
+        recoveryErrors.push(candidate)
+      }
+    }
+
+    await systemLogger.error(`Failed to install Custom Sub-Store runtime ${version}`, error)
+
+    if (recoveryErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...recoveryErrors],
+        'Custom Sub-Store runtime install failed and recovery also failed'
+      )
+    }
+
+    throw error
+  } finally {
+    try {
+      await rm(stagingDir, { recursive: true, force: true })
+    } catch (cleanupError) {
+      await systemLogger.error('Failed to clean up Sub-Store runtime staging', cleanupError)
+    }
   }
 }
 

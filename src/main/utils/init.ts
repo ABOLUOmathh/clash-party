@@ -52,6 +52,11 @@ import {
 } from './dirs'
 import { initLogger } from './logger'
 import { atomicWriteFile } from './safeFile'
+import {
+  hasSubStoreRuntimeOverride,
+  removeSubStoreRuntimeState,
+  subStoreRuntimeStatePath
+} from '../resolve/substoreRuntime'
 
 let isInitBasicCompleted = false
 let isRuntimeFilesCompleted = false
@@ -207,11 +212,39 @@ async function initFiles(): Promise<void> {
 
     await Promise.all(
       targets.map(async (targetPath) => {
-        const shouldCopy = !existsSync(targetPath) || (await isSourceNewer(sourcePath, targetPath))
+        const isSubStoreRuntimeBackend =
+          file === 'sub-store.bundle.cjs' &&
+          targetPath === path.join(mihomoWorkDir(), 'sub-store.bundle.cjs')
+
+        let recoverBundledSubStore = false
+
+        if (isSubStoreRuntimeBackend && existsSync(subStoreRuntimeStatePath(mihomoWorkDir()))) {
+          const preserveRuntimeBackend = await hasSubStoreRuntimeOverride(
+            mihomoWorkDir(),
+            targetPath
+          )
+
+          if (preserveRuntimeBackend) return
+
+          recoverBundledSubStore = true
+        }
+
+        const shouldCopy =
+          recoverBundledSubStore ||
+          !existsSync(targetPath) ||
+          (await isSourceNewer(sourcePath, targetPath))
+
         if (!shouldCopy) return
 
         try {
           await cp(sourcePath, targetPath, { recursive: true, force: true })
+
+          if (recoverBundledSubStore) {
+            await removeSubStoreRuntimeState(mihomoWorkDir())
+            await initLogger.warn(
+              'Recovered bundled Sub-Store backend after invalid runtime override'
+            )
+          }
         } catch (error: unknown) {
           const code = (error as NodeJS.ErrnoException).code
           // 文件被占用或权限问题，如果目标已存在则跳过

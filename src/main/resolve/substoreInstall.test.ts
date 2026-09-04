@@ -4,8 +4,11 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   cleanupSubStoreBackup,
+  replaceSubStoreBackend,
   replaceSubStoreComponents,
+  restoreSubStoreBackend,
   restoreSubStoreComponents,
+  validateSubStoreBackendStaging,
   validateSubStoreStaging,
   type SubStoreComponentPaths
 } from './substoreInstall'
@@ -44,6 +47,55 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(tempDir, { recursive: true, force: true })
+})
+
+describe('Sub-Store backend runtime install', () => {
+  it('validates a staged backend', async () => {
+    const paths = componentPaths()
+
+    await mkdir(path.dirname(paths.stagingBackendPath), { recursive: true })
+    await writeFile(paths.stagingBackendPath, 'new-backend')
+
+    await expect(validateSubStoreBackendStaging(paths.stagingBackendPath)).resolves.toBeUndefined()
+
+    await writeFile(paths.stagingBackendPath, '')
+
+    await expect(validateSubStoreBackendStaging(paths.stagingBackendPath)).rejects.toThrow(
+      'Sub-Store backend is missing or empty'
+    )
+  })
+
+  it('replaces only the backend and can restore it', async () => {
+    const paths = componentPaths()
+
+    await mkdir(path.dirname(paths.backendPath), { recursive: true })
+    await createCurrentComponents(paths)
+
+    await mkdir(path.dirname(paths.stagingBackendPath), { recursive: true })
+    await writeFile(paths.stagingBackendPath, 'new-backend')
+
+    const state = await replaceSubStoreBackend(paths)
+
+    expect(await readText(paths.backendPath)).toBe('new-backend')
+    expect(await readText(path.join(paths.frontendDir, 'index.html'))).toBe('old-frontend')
+
+    await restoreSubStoreBackend(paths, state)
+
+    expect(await readText(paths.backendPath)).toBe('old-backend')
+    expect(await readText(path.join(paths.frontendDir, 'index.html'))).toBe('old-frontend')
+  })
+
+  it('automatically restores the old backend when replacement fails', async () => {
+    const paths = componentPaths()
+
+    await mkdir(path.dirname(paths.backendPath), { recursive: true })
+    await createCurrentComponents(paths)
+
+    await expect(replaceSubStoreBackend(paths)).rejects.toThrow()
+
+    expect(await readText(paths.backendPath)).toBe('old-backend')
+    expect(await readText(path.join(paths.frontendDir, 'index.html'))).toBe('old-frontend')
+  })
 })
 
 describe('Sub-Store component reinstall', () => {
