@@ -349,16 +349,14 @@ export async function getSubStoreRuntimeState() {
 
 const CUSTOM_SUBSTORE_VERSION_PATTERN = /^\d+\.\d+\.\d+-custom\.\d+$/
 
-export async function fetchCustomSubStoreReleases(forceRefresh = false): Promise<string[]> {
+export async function fetchCustomSubStoreReleases(forceRefresh = false) {
   const releases = await getGitHubReleases(
     CUSTOM_SUBSTORE_OWNER,
     CUSTOM_SUBSTORE_REPOSITORY,
     forceRefresh
   )
 
-  return releases
-    .map((release) => release.name)
-    .filter((version) => CUSTOM_SUBSTORE_VERSION_PATTERN.test(version))
+  return releases.filter((release) => CUSTOM_SUBSTORE_VERSION_PATTERN.test(release.name))
 }
 
 export async function installCustomSubStoreRuntime(version: string): Promise<void> {
