@@ -61,6 +61,9 @@ import {
   stopSubStoreFrontendServer,
   stopSubStoreBackendServer,
   downloadSubStore,
+  fetchCustomSubStoreReleases,
+  getSubStoreRuntimeState,
+  installCustomSubStoreRuntime,
   subStoreFrontendPort,
   subStorePort
 } from '../resolve/server'
@@ -357,6 +360,9 @@ const asyncHandlers: Record<string, AsyncFn> = {
   stopSubStoreBackendServer,
   ensureSubStoreServices: startSubStoreServices,
   downloadSubStore,
+  fetchCustomSubStoreReleases,
+  getSubStoreRuntimeState,
+  installCustomSubStoreRuntime,
   subStoreSubs,
   subStoreCollections,
   // Theme

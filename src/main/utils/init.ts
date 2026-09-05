@@ -25,6 +25,11 @@ import {
   DEFAULT_MIHOMO_SKIP_AUTH_PREFIXES,
   getDefaultMihomoTunDevice
 } from '../../shared/appConfig'
+import {
+  hasSubStoreRuntimeOverride,
+  removeSubStoreRuntimeState,
+  subStoreRuntimeStatePath
+} from '../resolve/substoreRuntime'
 import { stringify } from './yaml'
 import {
   defaultConfig,
@@ -52,11 +57,6 @@ import {
 } from './dirs'
 import { initLogger } from './logger'
 import { atomicWriteFile } from './safeFile'
-import {
-  hasSubStoreRuntimeOverride,
-  removeSubStoreRuntimeState,
-  subStoreRuntimeStatePath
-} from '../resolve/substoreRuntime'
 
 let isInitBasicCompleted = false
 let isRuntimeFilesCompleted = false

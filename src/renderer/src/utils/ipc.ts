@@ -131,6 +131,24 @@ interface IpcApi {
     frontendPort?: number
   }>
   downloadSubStore: () => Promise<void>
+  fetchCustomSubStoreReleases: (forceRefresh?: boolean) => Promise<
+    {
+      name: string
+      zipball_url: string
+      tarball_url: string
+    }[]
+  >
+  getSubStoreRuntimeState: () => Promise<
+    | {
+        version: string
+        source: string
+        asset: string
+        sha256: string
+        sourceCommit?: string
+      }
+    | undefined
+  >
+  installCustomSubStoreRuntime: (version: string) => Promise<void>
   subStorePort: () => Promise<number>
   subStoreFrontendPort: () => Promise<number>
   subStoreSubs: () => Promise<ISubStoreSub[]>
@@ -298,6 +316,9 @@ export const {
   stopSubStoreBackendServer,
   ensureSubStoreServices,
   downloadSubStore,
+  fetchCustomSubStoreReleases,
+  getSubStoreRuntimeState,
+  installCustomSubStoreRuntime,
   subStorePort,
   subStoreFrontendPort,
   subStoreSubs,

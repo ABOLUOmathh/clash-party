@@ -14,6 +14,7 @@ import { getAppConfig, getControledMihomoConfig } from '../config'
 import { proxyLogger, systemLogger } from '../utils/logger'
 import { createCappedLogWritableStream } from '../utils/logFile'
 import { DEFAULT_MIHOMO_PORTS, DEFAULT_USE_SUB_STORE } from '../../shared/appConfig'
+import { downloadGitHubAsset, getGitHubReleases } from '../utils/github'
 import {
   SUBSTORE_RUNTIME_ASSET,
   SUBSTORE_RUNTIME_REPO,
@@ -22,9 +23,9 @@ import {
   readSubStoreRuntimeState,
   removeSubStoreRuntimeState,
   verifySubStoreBackendChecksum,
-  writeSubStoreRuntimeState
+  writeSubStoreRuntimeState,
+  hasSubStoreRuntimeOverride
 } from './substoreRuntime'
-import { downloadGitHubAsset, getGitHubReleases } from '../utils/github'
 import {
   cleanupSubStoreBackup,
   replaceSubStoreBackend,
@@ -335,6 +336,17 @@ export async function stopSubStoreBackendServer(): Promise<void> {
 
 const CUSTOM_SUBSTORE_OWNER = 'ABOLUOmathh'
 const CUSTOM_SUBSTORE_REPOSITORY = 'Sub-Store'
+export async function getSubStoreRuntimeState() {
+  const workDir = mihomoWorkDir()
+  const backendPath = path.join(workDir, 'sub-store.bundle.cjs')
+
+  const active = await hasSubStoreRuntimeOverride(workDir, backendPath)
+
+  if (!active) return undefined
+
+  return await readSubStoreRuntimeState(workDir)
+}
+
 const CUSTOM_SUBSTORE_VERSION_PATTERN = /^\d+\.\d+\.\d+-custom\.\d+$/
 
 export async function fetchCustomSubStoreReleases(forceRefresh = false): Promise<string[]> {
