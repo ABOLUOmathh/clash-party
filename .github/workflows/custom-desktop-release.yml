@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version, e.g. 2.0.2-custom.5'
+        description: 'Release version, e.g. 2.0.2-custom.9'
         required: true
-        default: '2.0.2-custom.5'
+        default: '2.0.2-custom.9'
 
 permissions:
   contents: write
@@ -33,7 +33,7 @@ jobs:
         run: |
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-custom\.[0-9]+$ ]]; then
             echo "Invalid version: $VERSION"
-            echo "Expected format: 2.0.2-custom.5"
+            echo "Expected format: 2.0.2-custom.9"
             exit 1
           fi
 
@@ -304,8 +304,14 @@ jobs:
           cat > release-notes.md <<'EOF'
           Clash Party Custom release.
 
-          Bundled Mihomo:
-          - v1.19.30-custom.5
+          Bundled components:
+          - Mihomo: v1.19.30-custom.5
+          - Sub-Store: 2.37.0-custom.4
+
+          OneSocks integration:
+          - Preserve and output Mihomo type: os nodes
+          - Canonical os:// share-link import support
+          - Real-node end-to-end connectivity verified with the current UOT-enabled configuration
 
           Custom Mihomo features:
           - SOCKS5-over-WebSocket transport support
@@ -316,7 +322,9 @@ jobs:
           - Protection against replacing custom Mihomo through the upstream /upgrade path
 
           Additional integration:
-          - Custom Sub-Store integration
+          - Fresh-install and built-in reinstall Sub-Store backend aligned to 2.37.0-custom.4
+          - Custom Sub-Store runtime selection remains available
+          - macOS PKG postinstall uses the Clash Party Custom.app installation path
           EOF
 
           gh release create "$RELEASE_TAG" \

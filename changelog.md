@@ -1,3 +1,14 @@
+# 2.0.2-custom.9
+
+## OneSocks 与自定义组件同步
+
+- 内置 Mihomo 更新至 `v1.19.30-custom.5`
+- Fresh install 与内置重装的 Sub-Store 后端统一至 `2.37.0-custom.4`
+- Sub-Store 支持 OneSocks `os://` 分享链接解析以及 Mihomo `type: os` 节点保留与输出
+- 使用真实 OneSocks 节点完成 Sub-Store → Clash Party → Mihomo 实际联网验证，当前验证配置启用了 UOT
+- 修复 macOS PKG postinstall 对 `Clash Party Custom.app` 的安装路径解析
+- 保留 HeySocks XHTTP、BLACKSTONE、SOCKS5-over-WebSocket 与 Custom Mihomo 升级保护
+
 # 2.0.2-custom.6
 
 ## Custom Mihomo 运行时版本与组件同步
