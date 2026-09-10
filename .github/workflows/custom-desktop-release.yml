@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version, e.g. 2.0.2-custom.9'
+        description: 'Release version, e.g. 2.0.2-custom.10'
         required: true
-        default: '2.0.2-custom.9'
+        default: '2.0.2-custom.10'
 
 permissions:
   contents: write
@@ -33,7 +33,7 @@ jobs:
         run: |
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-custom\.[0-9]+$ ]]; then
             echo "Invalid version: $VERSION"
-            echo "Expected format: 2.0.2-custom.9"
+            echo "Expected format: 2.0.2-custom.10"
             exit 1
           fi
 
@@ -305,8 +305,13 @@ jobs:
           Clash Party Custom release.
 
           Bundled components:
-          - Mihomo: v1.19.30-custom.5
-          - Sub-Store: 2.37.0-custom.4
+          - Mihomo: v1.19.30-custom.6
+          - Sub-Store: 2.37.0-custom.5
+
+          HeySocks VLESS integration:
+          - Preserve custom e/h parameters through Sub-Store VLESS URI parsing and Mihomo output
+          - Mihomo custom.6 implements the corresponding e/h wire compatibility
+          - Real-node A/B interoperability verified with REALITY + Vision
 
           OneSocks integration:
           - Preserve and output Mihomo type: os nodes
@@ -322,7 +327,7 @@ jobs:
           - Protection against replacing custom Mihomo through the upstream /upgrade path
 
           Additional integration:
-          - Fresh-install and built-in reinstall Sub-Store backend aligned to 2.37.0-custom.4
+          - Fresh-install and built-in reinstall Sub-Store backend aligned to 2.37.0-custom.5
           - Custom Sub-Store runtime selection remains available
           - macOS PKG postinstall uses the Clash Party Custom.app installation path
           EOF

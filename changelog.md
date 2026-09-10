@@ -1,3 +1,14 @@
+# 2.0.2-custom.10
+
+## HeySocks VLESS e/h 与自定义组件同步
+
+- 内置 Mihomo 更新至 `v1.19.30-custom.6`
+- Fresh install 与内置重装的 Sub-Store 后端统一至 `2.37.0-custom.5`
+- Sub-Store 支持 HeySocks VLESS 自定义 `e` / `h` 参数的 URI 解析、保留与 Mihomo 配置输出
+- Mihomo custom.6 增加对应的 HeySocks VLESS `e` / `h` 线协议兼容
+- 使用真实 HeySocks VLESS 节点完成 REALITY + Vision A/B 联网验证
+- 保留 OneSocks、HeySocks XHTTP、BLACKSTONE、SOCKS5-over-WebSocket 与 Custom Mihomo 升级保护
+
 # 2.0.2-custom.9
 
 ## OneSocks 与自定义组件同步
