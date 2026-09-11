@@ -24,6 +24,23 @@ export interface SubStoreBackendBackupState {
   hadBackend: boolean
 }
 
+export interface SubStoreBundledRestoreFinalization {
+  startBackend: () => Promise<void>
+  startFrontend: () => Promise<void>
+  clearRuntimeState: () => Promise<void>
+}
+
+export async function finalizeBundledSubStoreRestore(
+  operations: SubStoreBundledRestoreFinalization
+): Promise<void> {
+  await operations.startBackend()
+  await operations.startFrontend()
+
+  // Runtime marker is the commit record for a custom local backend.
+  // Clear it only after the bundled backend/frontend are actually running.
+  await operations.clearRuntimeState()
+}
+
 function backupBackendPath(paths: SubStoreBackendComponentPaths): string {
   return path.join(paths.backupDir, 'sub-store.bundle.cjs')
 }

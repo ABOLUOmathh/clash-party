@@ -4,6 +4,7 @@ import path from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   cleanupSubStoreBackup,
+  finalizeBundledSubStoreRestore,
   replaceSubStoreBackend,
   replaceSubStoreComponents,
   restoreSubStoreBackend,
@@ -95,6 +96,92 @@ describe('Sub-Store backend runtime install', () => {
 
     expect(await readText(paths.backendPath)).toBe('old-backend')
     expect(await readText(path.join(paths.frontendDir, 'index.html'))).toBe('old-frontend')
+  })
+})
+
+describe('Sub-Store bundled restore finalization', () => {
+  it('clears the custom runtime marker only after both bundled services start', async () => {
+    const calls: string[] = []
+
+    await finalizeBundledSubStoreRestore({
+      startBackend: async () => {
+        calls.push('backend')
+      },
+      startFrontend: async () => {
+        calls.push('frontend')
+      },
+      clearRuntimeState: async () => {
+        calls.push('marker')
+      }
+    })
+
+    expect(calls).toEqual(['backend', 'frontend', 'marker'])
+  })
+
+  it('preserves the runtime marker when bundled backend startup fails', async () => {
+    const calls: string[] = []
+    const error = new Error('backend failed')
+
+    await expect(
+      finalizeBundledSubStoreRestore({
+        startBackend: async () => {
+          calls.push('backend')
+          throw error
+        },
+        startFrontend: async () => {
+          calls.push('frontend')
+        },
+        clearRuntimeState: async () => {
+          calls.push('marker')
+        }
+      })
+    ).rejects.toBe(error)
+
+    expect(calls).toEqual(['backend'])
+  })
+
+  it('preserves the runtime marker when bundled frontend startup fails', async () => {
+    const calls: string[] = []
+    const error = new Error('frontend failed')
+
+    await expect(
+      finalizeBundledSubStoreRestore({
+        startBackend: async () => {
+          calls.push('backend')
+        },
+        startFrontend: async () => {
+          calls.push('frontend')
+          throw error
+        },
+        clearRuntimeState: async () => {
+          calls.push('marker')
+        }
+      })
+    ).rejects.toBe(error)
+
+    expect(calls).toEqual(['backend', 'frontend'])
+  })
+
+  it('propagates runtime marker removal failure after both bundled services start', async () => {
+    const calls: string[] = []
+    const error = new Error('marker removal failed')
+
+    await expect(
+      finalizeBundledSubStoreRestore({
+        startBackend: async () => {
+          calls.push('backend')
+        },
+        startFrontend: async () => {
+          calls.push('frontend')
+        },
+        clearRuntimeState: async () => {
+          calls.push('marker')
+          throw error
+        }
+      })
+    ).rejects.toBe(error)
+
+    expect(calls).toEqual(['backend', 'frontend', 'marker'])
   })
 })
 

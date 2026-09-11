@@ -28,6 +28,7 @@ import {
 } from './substoreRuntime'
 import {
   cleanupSubStoreBackup,
+  finalizeBundledSubStoreRestore,
   replaceSubStoreBackend,
   replaceSubStoreComponents,
   restoreSubStoreBackend,
@@ -601,15 +602,23 @@ export async function downloadSubStore(): Promise<void> {
     componentsReplaced = true
 
     // --------------------------------------------------------
-    // Phase 4: 启动新组件。
+    // Phase 4: 启动新组件，并最后提交 bundled runtime 状态。
     // --------------------------------------------------------
 
-    await startSubStoreBackendServer()
-    await startSubStoreFrontendServer()
+    // servicesNeedRestart 必须保持 true，直到 runtime marker 成功清除。
+    // 因此 backend/frontend 启动或 marker 清理任一步失败，
+    // catch 都会恢复安装前的组件与服务状态。
+    await finalizeBundledSubStoreRestore({
+      startBackend: startSubStoreBackendServer,
+      startFrontend: startSubStoreFrontendServer,
+      clearRuntimeState: async () => {
+        await removeSubStoreRuntimeState(workDir)
+      }
+    })
 
     servicesNeedRestart = false
 
-    // 新组件已经成功启动后才删除旧组件备份。
+    // 新组件与 bundled runtime 状态均已提交后，旧组件备份才可清理。
     try {
       await cleanupSubStoreBackup(backupDir)
     } catch (cleanupError) {
