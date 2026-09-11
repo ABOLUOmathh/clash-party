@@ -56,6 +56,19 @@ export interface CommitStagedMihomoRuntimeDependencies {
   restoreRuntime?: RuntimeRestorer
 }
 
+let mihomoRuntimeMutationTail: Promise<void> = Promise.resolve()
+
+async function runSerializedMihomoRuntimeMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const result = mihomoRuntimeMutationTail.then(operation)
+
+  mihomoRuntimeMutationTail = result.then(
+    () => undefined,
+    () => undefined
+  )
+
+  return await result
+}
+
 export function mihomoRuntimeInstallPaths(
   baseDataDir: string,
   platform: NodeJS.Platform = process.platform
@@ -192,7 +205,102 @@ export async function commitStagedMihomoRuntime(
   await cleanupMihomoRuntimeBackup(paths).catch(() => {})
 }
 
-export async function migrateLegacyMihomoRuntime(options: {
+export interface InstallPreparedMihomoRuntimeOptions {
+  baseDataDir: string
+  version: string
+  source: MihomoRuntimeSource
+  prepareStagedBinary: (paths: MihomoRuntimeInstallPaths) => Promise<void>
+  verifyIdentity: MihomoLegacyIdentityVerifier
+  stopBeforeCommit?: () => Promise<void>
+  restartPreviousRuntime?: () => Promise<void>
+  commitRuntime?: (baseDataDir: string, state: MihomoSpecificRuntimeState) => Promise<void>
+  platform?: NodeJS.Platform
+  arch?: string
+}
+
+export async function installPreparedMihomoRuntime(
+  options: InstallPreparedMihomoRuntimeOptions
+): Promise<void> {
+  if (options.stopBeforeCommit && !options.restartPreviousRuntime) {
+    throw new Error('restartPreviousRuntime is required when stopBeforeCommit is configured')
+  }
+
+  return await runSerializedMihomoRuntimeMutation(async () => {
+    const {
+      baseDataDir,
+      version,
+      source,
+      prepareStagedBinary,
+      verifyIdentity,
+      stopBeforeCommit,
+      restartPreviousRuntime,
+      commitRuntime = commitStagedMihomoRuntime,
+      platform = process.platform,
+      arch = process.arch
+    } = options
+
+    const paths = mihomoRuntimeInstallPaths(baseDataDir, platform)
+
+    await cleanupMihomoRuntimeStaging(paths)
+    await mkdir(paths.stagingDir, { recursive: true })
+
+    let stopAttempted = false
+
+    try {
+      await prepareStagedBinary(paths)
+
+      if (platform !== 'win32') {
+        await chmod(paths.stagingBinaryPath, 0o755)
+      }
+
+      await validateMihomoRuntimeBinary(paths.stagingBinaryPath, platform)
+
+      await verifyIdentity(paths.stagingBinaryPath, {
+        version,
+        source,
+        platform,
+        arch
+      })
+
+      const binary = await readFile(paths.stagingBinaryPath)
+
+      const state: MihomoSpecificRuntimeState = {
+        version,
+        source,
+        sha256: sha256Buffer(binary),
+        platform,
+        arch
+      }
+
+      if (stopBeforeCommit) {
+        // 从这里开始失败时必须恢复之前正在使用的 runtime。
+        // 在 await 之前标记，覆盖 stop 自身发生部分失败的情况。
+        stopAttempted = true
+        await stopBeforeCommit()
+      }
+
+      await commitRuntime(baseDataDir, state)
+    } catch (error) {
+      if (stopAttempted && restartPreviousRuntime) {
+        try {
+          await restartPreviousRuntime()
+        } catch (restartError) {
+          throw new AggregateError(
+            [error, restartError],
+            'Failed to install Mihomo runtime and restore the previous running runtime'
+          )
+        }
+      }
+
+      throw error
+    } finally {
+      // staging 永远只承载未提交材料。清理失败不能覆盖安装结果。
+      await cleanupMihomoRuntimeStaging(paths).catch(() => {})
+    }
+  })
+}
+
+async function migrateLegacyMihomoRuntimeUnlocked(options: {
   baseDataDir: string
   legacyBinaryPath: string
   version: string
@@ -264,4 +372,12 @@ export async function migrateLegacyMihomoRuntime(options: {
     // 如果 commit 的 rollback 自身失败，backup 必须留下供人工恢复。
     await cleanupMihomoRuntimeStaging(paths).catch(() => {})
   }
+}
+
+export async function migrateLegacyMihomoRuntime(
+  options: Parameters<typeof migrateLegacyMihomoRuntimeUnlocked>[0]
+): Promise<MihomoLegacyMigrationResult> {
+  return await runSerializedMihomoRuntimeMutation(async () => {
+    return await migrateLegacyMihomoRuntimeUnlocked(options)
+  })
 }

@@ -11,14 +11,6 @@ import {
 } from './mihomoRuntimeInstall'
 import { verifyMihomoLegacyRuntimeIdentity } from './mihomoRuntimeIdentity'
 
-let legacyMigrationTail: Promise<void> = Promise.resolve()
-
-async function runSerializedLegacyMigration(task: () => Promise<void>): Promise<void> {
-  const run = legacyMigrationTail.then(task, task)
-  legacyMigrationTail = run.catch(() => {})
-  await run
-}
-
 export interface ResolveMihomoRuntimeLifecycleOptions {
   baseDataDir: string
   requestedCore: MihomoCoreSelection
@@ -85,16 +77,14 @@ export async function resolveMihomoRuntimeLifecycle(
   }
 
   try {
-    await runSerializedLegacyMigration(async () => {
-      await migrateLegacyMihomoRuntime({
-        baseDataDir,
-        legacyBinaryPath,
-        version: requestedVersion,
-        source: resolvedSource,
-        verifyIdentity,
-        platform,
-        arch
-      })
+    await migrateLegacyMihomoRuntime({
+      baseDataDir,
+      legacyBinaryPath,
+      version: requestedVersion,
+      source: resolvedSource,
+      verifyIdentity,
+      platform,
+      arch
     })
   } catch (error) {
     // Legacy migration is best-effort. A bad/missing/unverifiable old runtime
