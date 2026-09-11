@@ -99,6 +99,7 @@ const Mihomo: React.FC = () => {
   const {
     core = 'mihomo',
     specificVersion,
+    specificSource,
     enableSmartCore = false,
     enableSmartOverride = true,
     smartCoreUseLightGBM = false,
@@ -295,7 +296,8 @@ const Mihomo: React.FC = () => {
       // 更新应用配置
       await patchAppConfig({
         core: 'mihomo-specific',
-        specificVersion: selectedTag
+        specificVersion: selectedTag,
+        specificSource: coreSource
       })
 
       // 重启核心
@@ -329,9 +331,11 @@ const Mihomo: React.FC = () => {
   // 打开模态框时获取标签
   const handleOpenModal = async () => {
     const source: 'official' | 'custom' =
-      core === 'mihomo' || (core === 'mihomo-specific' && specificVersion?.includes('-custom.'))
-        ? 'custom'
-        : 'official'
+      core === 'mihomo-specific'
+        ? (specificSource ?? (specificVersion?.includes('-custom.') ? 'custom' : 'official'))
+        : core === 'mihomo'
+          ? 'custom'
+          : 'official'
 
     setCoreSource(source)
     setTags([])
