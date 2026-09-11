@@ -95,7 +95,7 @@ const DEFAULT_WEBUI_PANEL_URL = WEBUI_PANEL_OPTIONS[0].url
 
 const Mihomo: React.FC = () => {
   const { t } = useTranslation()
-  const { appConfig, patchAppConfig } = useAppConfig()
+  const { appConfig, patchAppConfig, mutateAppConfig } = useAppConfig()
   const {
     core = 'mihomo',
     specificVersion,
@@ -291,16 +291,13 @@ const Mihomo: React.FC = () => {
 
     setInstalling(true)
     try {
-      // 下载并安装特定版本的核心
+      // 主进程完成 runtime transaction，并严格持久化 User Intent。
       await installSpecificMihomoCore(selectedTag, coreSource)
-      // 更新应用配置
-      await patchAppConfig({
-        core: 'mihomo-specific',
-        specificVersion: selectedTag,
-        specificSource: coreSource
-      })
 
-      // 重启核心
+      // 刷新 renderer 中的配置快照；实际配置已经由主进程写盘成功。
+      mutateAppConfig()
+
+      // 使用刚提交的 User Intent 启动新 runtime。
       await restartCore()
 
       // 关闭模态框

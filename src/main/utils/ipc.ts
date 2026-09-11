@@ -135,19 +135,14 @@ import {
   patchPluginItem
 } from '../resolve/plugin'
 import { getPluginConfig } from '../config/plugin'
+import { installSpecificMihomoCore } from '../resolve/mihomoSpecificInstall'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
 import { getIconDataURL } from './icon'
 import { getAppName } from './appName'
 import { logDir, rulePath } from './dirs'
 // import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
-import {
-  installMihomoCore,
-  installCustomMihomoCore,
-  getGitHubTags,
-  getGitHubReleases,
-  clearVersionCache
-} from './github'
+import { getGitHubTags, getGitHubReleases, clearVersionCache } from './github'
 import { atomicWriteFile } from './safeFile'
 import { startSubStoreServices } from './init'
 
@@ -189,21 +184,6 @@ async function fetchMihomoTags(
 
 async function fetchCustomMihomoTags(forceRefresh = false) {
   return await getGitHubReleases('ABOLUOmathh', 'mihomo', forceRefresh)
-}
-
-async function installSpecificMihomoCore(
-  version: string,
-  source: 'official' | 'custom' = 'official'
-) {
-  if (source === 'custom') {
-    clearVersionCache('ABOLUOmathh', 'mihomo')
-
-    return await installCustomMihomoCore(version)
-  }
-
-  clearVersionCache('MetaCubeX', 'mihomo')
-
-  return await installMihomoCore(version)
 }
 
 async function clearMihomoVersionCache(): Promise<void> {

@@ -1,12 +1,17 @@
-import { chmodSync, createWriteStream, createReadStream, existsSync, renameSync, rmSync } from 'fs'
-import { writeFile } from 'fs/promises'
-import { platform } from 'os'
-import { join } from 'path'
+import { createReadStream, createWriteStream } from 'fs'
+import { mkdtemp, rm, writeFile } from 'fs/promises'
+import { platform, tmpdir } from 'os'
+import { join, resolve } from 'path'
+import { pipeline } from 'stream/promises'
 import { createGunzip } from 'zlib'
 import AdmZip from 'adm-zip'
-import { stopCore } from '../core/manager'
+import { hasCoreProcess, restartCore, stopCore } from '../core/manager'
 import { getAppConfig } from '../config'
-import { mihomoCoreDir } from './dirs'
+import { resolveActiveMihomoRuntime } from '../resolve/mihomoActiveRuntime'
+import { mihomoSpecificRuntimePaths, type MihomoRuntimeSource } from '../resolve/mihomoRuntime'
+import { installPreparedMihomoRuntime } from '../resolve/mihomoRuntimeInstall'
+import { verifyMihomoLegacyRuntimeIdentity } from '../resolve/mihomoRuntimeIdentity'
+import { dataDir } from './dirs'
 import * as chromeRequest from './chromeRequest'
 import { createLogger } from './logger'
 
@@ -18,14 +23,6 @@ const GITHUB_PROXIES = [
   'https://down.clashparty.org',
   'https://download.mihomo.party'
 ]
-
-function cleanupTempFile(path: string): void {
-  try {
-    if (existsSync(path)) rmSync(path)
-  } catch (error) {
-    log.warn(`Failed to remove temporary file ${path}`, error)
-  }
-}
 
 function buildDownloadUrls(githubUrl: string, proxyPref = ''): string[] {
   if (proxyPref === 'direct') return [githubUrl]
@@ -217,223 +214,159 @@ export async function downloadGitHubAsset(url: string, outputPath: string): Prom
     : new Error('Failed to download core file')
 }
 
+async function extractMihomoReleaseBinary(
+  archivePath: string,
+  archiveType: 'zip' | 'gz',
+  executableName: string,
+  stagingBinaryPath: string
+): Promise<void> {
+  if (archiveType === 'zip') {
+    log.debug(`Extracting Mihomo ZIP candidate ${archivePath}`)
+
+    const zip = new AdmZip(archivePath)
+    const entry = zip.getEntries().find((candidate) => {
+      const normalized = candidate.entryName.replaceAll('\\', '/')
+      return normalized.split('/').pop() === executableName
+    })
+
+    if (!entry) {
+      throw new Error(`Executable file not found in zip: ${executableName}`)
+    }
+
+    await writeFile(stagingBinaryPath, entry.getData())
+    return
+  }
+
+  log.debug(`Extracting Mihomo GZ candidate ${archivePath}`)
+
+  await pipeline(
+    createReadStream(archivePath),
+    createGunzip(),
+    createWriteStream(stagingBinaryPath)
+  )
+}
+
+async function installMihomoRelease(version: string, source: MihomoRuntimeSource): Promise<void> {
+  const plat = platform()
+  const arch = process.arch
+  const releaseName = PLATFORM_MAP[`${plat}-${arch}`]
+
+  if (!releaseName) {
+    throw new Error(`Unsupported platform "${plat}-${arch}"`)
+  }
+
+  const isWindows = plat === 'win32'
+  const archiveType: 'zip' | 'gz' = isWindows ? 'zip' : 'gz'
+  const executableName = `${releaseName}${isWindows ? '.exe' : ''}`
+  const repository = source === 'custom' ? 'ABOLUOmathh/mihomo' : 'MetaCubeX/mihomo'
+  const downloadURL =
+    `https://github.com/${repository}/releases/download/${version}/` +
+    `${releaseName}-${version}.${archiveType}`
+
+  const baseDataDir = dataDir()
+  const persistentRuntime = mihomoSpecificRuntimePaths(baseDataDir, plat)
+
+  // 下载不占用 runtime mutation lock：
+  // 网络可能很慢，而 migration/其他 runtime 操作不应该因此被阻塞。
+  // 真正进入 shared staging 之后，installPreparedMihomoRuntime 会负责串行化。
+  const downloadDir = await mkdtemp(join(tmpdir(), 'clash-party-mihomo-'))
+  const archivePath = join(downloadDir, `mihomo.${archiveType}`)
+
+  let stoppedRunningCore = false
+
+  try {
+    await downloadGitHubAsset(downloadURL, archivePath)
+
+    await installPreparedMihomoRuntime({
+      baseDataDir,
+      version,
+      source,
+      platform: plat,
+      arch,
+      verifyIdentity: verifyMihomoLegacyRuntimeIdentity,
+
+      prepareStagedBinary: async (paths) => {
+        await extractMihomoReleaseBinary(
+          archivePath,
+          archiveType,
+          executableName,
+          paths.stagingBinaryPath
+        )
+      },
+
+      // POSIX 可以安全 rename 正在执行的 binary。
+      // Windows 才需要在最终 commit 前处理 exe 文件锁，而且只有当前
+      // 真正运行的是 persistent specific runtime 时才应停止核心。
+      stopBeforeCommit: isWindows
+        ? async () => {
+            if (!hasCoreProcess()) return
+
+            const { core = 'mihomo', specificVersion, specificSource } = await getAppConfig()
+
+            const activeRuntime = await resolveActiveMihomoRuntime({
+              core,
+              specificVersion,
+              specificSource
+            })
+
+            if (resolve(activeRuntime.activePath) !== resolve(persistentRuntime.binaryPath)) {
+              return
+            }
+
+            // 在 await 前记录。即使 stopCore 自身部分失败，
+            // transaction 的 failure path 也应该尝试恢复运行状态。
+            stoppedRunningCore = true
+            log.debug('Stopping running persistent Mihomo runtime before Windows commit')
+            await stopCore(true)
+          }
+        : undefined,
+
+      restartPreviousRuntime: isWindows
+        ? async () => {
+            if (!stoppedRunningCore) return
+
+            log.debug('Restarting previous Mihomo runtime after failed Windows commit')
+            await restartCore()
+          }
+        : undefined
+    })
+
+    log.info(`Successfully installed ${source} Mihomo runtime ${version}`)
+  } finally {
+    // 下载文件不是 runtime state。清理失败不能把一次成功安装变成失败。
+    await rm(downloadDir, { recursive: true, force: true }).catch((error) => {
+      log.warn(`Failed to remove Mihomo download directory ${downloadDir}`, error)
+    })
+  }
+}
+
 /**
- * 安装特定版本的 mihomo 核心
- * @param version 版本号
+ * 安装特定版本的官方 Mihomo 核心。
+ * 安装成功只更新 persistent runtime；User Intent 由上层 main-process orchestration 在成功后提交。
  */
 export async function installMihomoCore(version: string): Promise<void> {
   try {
-    log.info(`Installing mihomo core version ${version}`)
-
-    const plat = platform()
-    const arch = process.arch
-
-    // 映射平台和架构到 GitHub Release 文件名
-    const key = `${plat}-${arch}`
-    const name = PLATFORM_MAP[key]
-
-    if (!name) {
-      throw new Error(`Unsupported platform "${plat}-${arch}"`)
-    }
-
-    const isWin = plat === 'win32'
-    const urlExt = isWin ? 'zip' : 'gz'
-    const downloadURL = `https://github.com/MetaCubeX/mihomo/releases/download/${version}/${name}-${version}.${urlExt}`
-
-    const coreDir = mihomoCoreDir()
-    const tempZip = join(coreDir, `temp-core.${urlExt}`)
-    const exeFile = `${name}${isWin ? '.exe' : ''}`
-    const targetFile = `mihomo-specific${isWin ? '.exe' : ''}`
-    const targetPath = join(coreDir, targetFile)
-
-    // 如果目标文件已存在，先停止核心
-    if (existsSync(targetPath)) {
-      log.debug('Stopping core before extracting new core file')
-      // 先停止核心
-      await stopCore(true)
-    }
-
-    // 下载文件
-    await downloadGitHubAsset(downloadURL, tempZip)
-
-    // 解压文件
-    if (urlExt === 'zip') {
-      log.debug(`Extracting ZIP file ${tempZip}`)
-      const zip = new AdmZip(tempZip)
-      const entries = zip.getEntries()
-      const entry = entries.find((e) => e.entryName.includes(exeFile))
-
-      if (entry) {
-        zip.extractEntryTo(entry, coreDir, false, true, false, targetFile)
-        log.debug(`Successfully extracted ${exeFile} to ${targetPath}`)
-      } else {
-        throw new Error(`Executable file not found in zip: ${exeFile}`)
-      }
-    } else {
-      // 处理.gz 文件
-      // 先解压到临时文件再原子替换：直接往 targetPath 写的话，解压中途失败
-      // 会把原本可用的内核截断成半个文件，用户连回退都没得回退。
-      log.debug(`Extracting GZ file ${tempZip}`)
-      const stagingPath = `${targetPath}.download`
-      const readStream = createReadStream(tempZip)
-      const writeStream = createWriteStream(stagingPath)
-
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const gunzip = createGunzip()
-          const onError = (error: Error): void => {
-            log.error('Gzip decompression failed', error)
-            readStream.destroy()
-            gunzip.destroy()
-            writeStream.destroy()
-            reject(new Error(`Gzip decompression failed: ${error.message}`))
-          }
-
-          readStream.on('error', onError)
-          gunzip.on('error', onError)
-          writeStream.on('error', onError)
-
-          readStream
-            .pipe(gunzip)
-            .pipe(writeStream)
-            .on('finish', () => {
-              log.debug('Gunzip finished')
-              resolve()
-            })
-        })
-
-        // 用 chmodSync 而不是拼 shell 命令：macOS 的数据目录是
-        // ~/Library/Application Support/... ，路径里带空格，未加引号的
-        // `chmod 755 <path>` 必然失败，而失败只被 warn 掉，用户拿到的是
-        // 一个没有执行权限的内核，表现为「装好了但起不来」。
-        chmodSync(stagingPath, 0o755)
-        log.debug('Chmod binary finished')
-        renameSync(stagingPath, targetPath)
-      } catch (error) {
-        try {
-          if (existsSync(stagingPath)) rmSync(stagingPath)
-        } catch {
-          // ignore
-        }
-        throw error
-      }
-    }
-
-    // 清理临时文件
-    log.debug(`Cleaning up temporary file ${tempZip}`)
-    cleanupTempFile(tempZip)
-
-    log.info(`Successfully installed mihomo core version ${version}`)
+    log.info(`Installing official Mihomo core version ${version}`)
+    await installMihomoRelease(version, 'official')
   } catch (error) {
-    // 解压失败时下载的压缩包会一直留在内核目录里，每次重试再落一份
-    cleanupTempFile(join(mihomoCoreDir(), `temp-core.zip`))
-    cleanupTempFile(join(mihomoCoreDir(), `temp-core.gz`))
-    log.error('Failed to install mihomo core', error)
+    log.error('Failed to install official Mihomo core', error)
+
     throw new Error(
       `Failed to install core: ${error instanceof Error ? error.message : String(error)}`
     )
   }
 }
 
+/**
+ * 安装 Clash Party Custom 使用的自定义 Mihomo 核心。
+ * 与官方版本共用完全相同的 persistent runtime transaction。
+ */
 export async function installCustomMihomoCore(version: string): Promise<void> {
   try {
-    log.info(`Installing custom mihomo core version ${version}`)
-
-    const plat = platform()
-    const arch = process.arch
-
-    const key = `${plat}-${arch}`
-    const name = PLATFORM_MAP[key]
-
-    if (!name) {
-      throw new Error(`Unsupported platform "${plat}-${arch}"`)
-    }
-
-    const isWin = plat === 'win32'
-    const urlExt = isWin ? 'zip' : 'gz'
-
-    const downloadURL = `https://github.com/ABOLUOmathh/mihomo/releases/download/${version}/${name}-${version}.${urlExt}`
-
-    const coreDir = mihomoCoreDir()
-
-    const tempFile = join(coreDir, `temp-custom-core.${urlExt}`)
-
-    const targetFile = `mihomo-specific${isWin ? '.exe' : ''}`
-
-    const targetPath = join(coreDir, targetFile)
-
-    await downloadGitHubAsset(downloadURL, tempFile)
-
-    if (urlExt === 'zip') {
-      const zip = new AdmZip(tempFile)
-
-      const entry = zip.getEntries().find((e) => e.entryName.includes(name))
-
-      if (!entry) {
-        throw new Error(`Executable not found ${name}`)
-      }
-
-      if (existsSync(targetPath)) {
-        log.debug('Stopping existing custom mihomo core')
-        await stopCore(true)
-      }
-
-      zip.extractEntryTo(entry, coreDir, false, true, false, targetFile)
-    } else {
-      const stagingPath = `${targetPath}.download`
-      const readStream = createReadStream(tempFile)
-      const writeStream = createWriteStream(stagingPath)
-
-      try {
-        await new Promise<void>((resolve, reject) => {
-          const gunzip = createGunzip()
-
-          const onError = (error: Error): void => {
-            log.error('Custom Mihomo gzip decompression failed', error)
-            readStream.destroy()
-            gunzip.destroy()
-            writeStream.destroy()
-            reject(new Error(`Custom Mihomo gzip decompression failed: ${error.message}`))
-          }
-
-          readStream.on('error', onError)
-          gunzip.on('error', onError)
-          writeStream.on('error', onError)
-
-          readStream
-            .pipe(gunzip)
-            .pipe(writeStream)
-            .on('finish', () => {
-              resolve()
-            })
-        })
-
-        chmodSync(stagingPath, 0o755)
-
-        if (existsSync(targetPath)) {
-          log.debug('Stopping existing custom mihomo core')
-          await stopCore(true)
-        }
-
-        renameSync(stagingPath, targetPath)
-      } catch (error) {
-        try {
-          if (existsSync(stagingPath)) rmSync(stagingPath)
-        } catch {
-          // ignore cleanup failure
-        }
-
-        throw error
-      }
-    }
-
-    log.info(`Custom mihomo installed ${targetPath}`)
+    log.info(`Installing custom Mihomo core version ${version}`)
+    await installMihomoRelease(version, 'custom')
   } catch (error) {
-    log.error('Failed installing custom mihomo', error)
-
+    log.error('Failed installing custom Mihomo', error)
     throw error
-  } finally {
-    cleanupTempFile(join(mihomoCoreDir(), 'temp-custom-core.zip'))
-    cleanupTempFile(join(mihomoCoreDir(), 'temp-custom-core.gz'))
   }
 }
