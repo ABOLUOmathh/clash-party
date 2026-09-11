@@ -27,6 +27,16 @@ vi.mock('../utils/dirs', () => ({
   profileConfigPath: () => join(testDir, 'profile.yaml'),
   profilePath: (id: string) => join(testDir, 'profiles', `${id}.yaml`)
 }))
+
+vi.mock('../resolve/mihomoActiveRuntime', () => ({
+  resolveActiveMihomoRuntime: () =>
+    Promise.resolve({
+      requestedCore: 'mihomo',
+      activeCore: 'mihomo',
+      activePath: join(testDir, 'mihomo'),
+      fallback: false
+    })
+}))
 vi.mock('../utils/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),

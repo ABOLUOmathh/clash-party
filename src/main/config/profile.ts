@@ -12,18 +12,13 @@ import { parse, stringify } from '../utils/yaml'
 import { defaultProfile } from '../utils/template'
 import { decryptAgeContent } from '../utils/age'
 import { DEFAULT_MIHOMO_PORTS } from '../../shared/appConfig'
+import { resolveActiveMihomoRuntime } from '../resolve/mihomoActiveRuntime'
 import { subStorePort } from '../resolve/server'
 import { mihomoCloseAllConnections, mihomoHotReloadConfig } from '../core/mihomoApi'
 import { checkProfileConfig, restartCore } from '../core/manager'
 import { generateProfile } from '../core/factory'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
-import {
-  mihomoCorePath,
-  mihomoProfileWorkDir,
-  mihomoWorkDir,
-  profileConfigPath,
-  profilePath
-} from '../utils/dirs'
+import { mihomoProfileWorkDir, mihomoWorkDir, profileConfigPath, profilePath } from '../utils/dirs'
 import { createLogger } from '../utils/logger'
 import { atomicWriteFile, WriteQueue } from '../utils/safeFile'
 import { getAppConfig } from './app'
@@ -551,7 +546,7 @@ async function validateRemoteProfileCandidate(item: IProfileItem, content: strin
   const candidatePath = join(candidateDir, 'config.yaml')
 
   try {
-    const { core = 'mihomo' } = await getAppConfig()
+    const { core = 'mihomo', specificVersion, specificSource } = await getAppConfig()
     const baseProfile = await parseProfileContent(item.id, content, item.ageSecretKey)
     await generateProfile(undefined, {
       profileId: item.id,
@@ -561,7 +556,12 @@ async function validateRemoteProfileCandidate(item: IProfileItem, content: strin
       outputPath: candidatePath,
       updateRuntimeConfig: false
     })
-    await checkProfileConfig(candidatePath, core, item.ageSecretKey)
+    const runtime = await resolveActiveMihomoRuntime({
+      core,
+      specificVersion,
+      specificSource
+    })
+    await checkProfileConfig(candidatePath, core, item.ageSecretKey, runtime.activePath)
   } finally {
     await rm(candidateDir, { recursive: true, force: true }).catch(() => {})
   }
@@ -697,9 +697,18 @@ export async function convertMrsRuleset(filePath: string, behavior: string): Pro
     throw new Error(`Unsupported ruleset behavior: ${behavior}`)
   }
 
-  const { core = 'mihomo' } = await getAppConfig()
-  const corePath = mihomoCorePath(core)
-  const { diffWorkDir = false } = await getAppConfig()
+  const {
+    core = 'mihomo',
+    specificVersion,
+    specificSource,
+    diffWorkDir = false
+  } = await getAppConfig()
+  const runtime = await resolveActiveMihomoRuntime({
+    core,
+    specificVersion,
+    specificSource
+  })
+  const corePath = runtime.activePath
   const { current } = await getProfileConfig()
   let fullPath: string
   if (isAbsolutePath(filePath)) {
