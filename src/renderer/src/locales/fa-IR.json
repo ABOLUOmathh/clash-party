@@ -208,6 +208,8 @@
   "mihomo.alphaVersion": "نسخه آلفا",
   "mihomo.smartVersion": "Smart",
   "mihomo.specificVersion": "نسخه خاص",
+  "mihomo.runtimeFallback": "بازگشت زمان اجرا: هسته داخلی",
+  "mihomo.runtimeFallbackTooltip": "نسخه خاص انتخاب‌شده در حال حاضر در دسترس نیست. هسته پایدار داخلی استفاده می‌شود و انتخاب نسخه خاص شما حفظ خواهد شد.",
   "mihomo.selectSpecificVersion": "انتخاب نسخه خاص",
   "mihomo.searchVersion": "جستجوی نسخه...",
   "mihomo.installVersion": "نصب نسخه",

@@ -210,6 +210,8 @@
   "mihomo.alphaVersion": "Альфа",
   "mihomo.smartVersion": "Smart",
   "mihomo.specificVersion": "Выбрать версию",
+  "mihomo.runtimeFallback": "Резервное встроенное ядро",
+  "mihomo.runtimeFallbackTooltip": "Выбранная версия сейчас недоступна. Будет использовано встроенное стабильное ядро, а выбранная вами версия останется сохранённой.",
   "mihomo.selectSpecificVersion": "Выбрать определённую версию",
   "mihomo.searchVersion": "Поиск версии...",
   "mihomo.installVersion": "Установить версию",

@@ -217,6 +217,8 @@
   "mihomo.alphaVersion": "Alpha",
   "mihomo.smartVersion": "Smart",
   "mihomo.specificVersion": "Specific Version",
+  "mihomo.runtimeFallback": "Runtime fallback: Bundled Stable",
+  "mihomo.runtimeFallbackTooltip": "The selected specific version is currently unavailable. The bundled stable core will be used while your specific-version selection is preserved.",
   "mihomo.selectSpecificVersion": "Select Specific Version",
   "mihomo.searchVersion": "Search version...",
   "mihomo.installVersion": "Install Version",

@@ -217,6 +217,8 @@
   "mihomo.alphaVersion": "预览版",
   "mihomo.smartVersion": "Smart 版",
   "mihomo.specificVersion": "特定版本",
+  "mihomo.runtimeFallback": "运行时回退：内置稳定版",
+  "mihomo.runtimeFallbackTooltip": "所选特定版本当前不可用。运行时将使用内置稳定版，同时保留你的特定版本选择。",
   "mihomo.selectSpecificVersion": "选择特定版本",
   "mihomo.searchVersion": "搜索版本...",
   "mihomo.installVersion": "安装版本",

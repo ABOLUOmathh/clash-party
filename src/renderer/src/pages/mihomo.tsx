@@ -42,6 +42,7 @@ import {
   triggerSysProxy,
   fetchMihomoTags,
   fetchCustomMihomoTags,
+  getMihomoRuntimeStatus,
   installSpecificMihomoCore,
   clearMihomoVersionCache,
   mihomoUpgradeUI
@@ -177,6 +178,8 @@ const Mihomo: React.FC = () => {
   const [installing, setInstalling] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [runtimeStatus, setRuntimeStatus] =
+    useState<Awaited<ReturnType<typeof getMihomoRuntimeStatus>>>()
 
   // 生成随机端口 (范围 1024-65535)
   const generateRandomPort = () => Math.floor(Math.random() * (65535 - 1024 + 1)) + 1024
@@ -188,6 +191,27 @@ const Mihomo: React.FC = () => {
   useEffect(() => {
     setExternalUiUrlInput(externalUiUrl)
   }, [externalUiUrl])
+
+  useEffect(() => {
+    let cancelled = false
+
+    setRuntimeStatus(undefined)
+
+    void getMihomoRuntimeStatus()
+      .then((status) => {
+        if (!cancelled) setRuntimeStatus(status)
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Failed to resolve Mihomo runtime status:', error)
+          setRuntimeStatus(undefined)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [core, specificVersion, specificSource])
 
   const onChangeNeedRestart = async (patch: Partial<IMihomoConfig>): Promise<void> => {
     await patchControledMihomoConfig(patch)
@@ -298,7 +322,18 @@ const Mihomo: React.FC = () => {
       mutateAppConfig()
 
       // 使用刚提交的 User Intent 启动新 runtime。
-      await restartCore()
+      try {
+        await restartCore()
+      } finally {
+        // Runtime/intent have already been committed at this point.
+        // Re-resolve even when process restart fails so the UI does not
+        // retain stale fallback state for an unchanged desired version.
+        try {
+          setRuntimeStatus(await getMihomoRuntimeStatus())
+        } catch (error) {
+          console.error('Failed to refresh Mihomo runtime status:', error)
+        }
+      }
 
       // 关闭模态框
       onClose()
@@ -429,6 +464,17 @@ const Mihomo: React.FC = () => {
                     <Chip size="sm" variant="flat" color="primary">
                       {specificVersion}
                     </Chip>
+                  )}
+                  {core === 'mihomo-specific' && runtimeStatus?.fallback && (
+                    <Tooltip
+                      content={t('mihomo.runtimeFallbackTooltip')}
+                      placement="top"
+                      className="max-w-xs"
+                    >
+                      <Chip size="sm" variant="flat" color="warning">
+                        {t('mihomo.runtimeFallback')}
+                      </Chip>
+                    </Tooltip>
                   )}
                 </div>
               }

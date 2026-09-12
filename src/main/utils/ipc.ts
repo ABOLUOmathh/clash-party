@@ -135,6 +135,7 @@ import {
   patchPluginItem
 } from '../resolve/plugin'
 import { getPluginConfig } from '../config/plugin'
+import { getMihomoRuntimeStatus } from '../resolve/mihomoRuntimeStatus'
 import { installSpecificMihomoCore } from '../resolve/mihomoSpecificInstall'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
@@ -323,6 +324,7 @@ const asyncHandlers: Record<string, AsyncFn> = {
   downloadAndInstallUpdate,
   fetchMihomoTags,
   fetchCustomMihomoTags,
+  getMihomoRuntimeStatus,
   installSpecificMihomoCore,
   clearMihomoVersionCache,
   // Backup

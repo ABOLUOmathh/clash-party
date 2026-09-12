@@ -111,6 +111,16 @@ interface IpcApi {
     forceRefresh?: boolean
   ) => Promise<{ name: string; zipball_url: string; tarball_url: string }[]>
   fetchCustomMihomoTags: (forceRefresh?: boolean) => Promise<unknown>
+  getMihomoRuntimeStatus: () => Promise<{
+    requestedCore: 'mihomo' | 'mihomo-alpha' | 'mihomo-smart' | 'mihomo-specific'
+    requestedVersion?: string
+    requestedSource?: 'official' | 'custom'
+    activeCore: 'mihomo' | 'mihomo-alpha' | 'mihomo-smart' | 'mihomo-specific'
+    activeVersion?: string
+    activeSource?: 'official' | 'custom'
+    fallback: boolean
+    fallbackReason?: string
+  }>
   installSpecificMihomoCore: (version: string, source?: 'official' | 'custom') => Promise<void>
   clearMihomoVersionCache: () => Promise<void>
   // Backup
@@ -299,6 +309,7 @@ export const {
   getVersion,
   fetchMihomoTags,
   fetchCustomMihomoTags,
+  getMihomoRuntimeStatus,
   installSpecificMihomoCore,
   clearMihomoVersionCache,
   // Backup
