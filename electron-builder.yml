@@ -1,5 +1,5 @@
-appId: party.mihomo.app
-productName: Clash Party
+appId: io.github.aboluomathh.clashparty.custom
+productName: Clash Party Custom
 directories:
   buildResources: build
 files:
@@ -20,24 +20,13 @@ asarUnpack:
 extraResources:
   - from: './extra/'
     to: ''
-protocols:
-  name: 'Clash Party URI Scheme'
-  schemes:
-    - 'clash'
-    - 'mihomo'
-fileAssociations:
-  - ext: 'cpx'
-    name: 'Clash Party Plugin'
-    description: 'Clash Party airport plugin descriptor'
-    mimeType: 'application/x-clash-party-plugin'
-    role: 'Viewer'
 win:
   target:
     - nsis
     - 7z
-  artifactName: clash-party-windows-${version}-${arch}-portable.${ext}
+  artifactName: ClashParty-win-${version}-${arch}-portable.${ext}
 nsis:
-  artifactName: clash-party-windows-${version}-${arch}-setup.${ext}
+  artifactName: ClashParty-win-${version}-${arch}-setup.${ext}
   uninstallDisplayName: ${productName}
   allowToChangeInstallationDirectory: true
   oneClick: false
@@ -67,22 +56,22 @@ pkg:
     alignment: bottomleft
     file: build/background.png
 linux:
-  executableName: mihomo-party
+  executableName: clash-party-custom
   icon: build/icon.png
   desktop:
     entry:
-      Name: Clash Party
+      Name: Clash Party Custom
       GenericName: Proxy Client
       Comment: A GUI client based on Mihomo
       MimeType: 'x-scheme-handler/clash;x-scheme-handler/mihomo'
       Keywords: proxy;clash;mihomo;vpn;
-      StartupWMClass: mihomo-party
-      Icon: mihomo-party
+      StartupWMClass: clash-party-custom
+      Icon: clash-party-custom
   target:
     - deb
     - rpm
     - pacman
-  maintainer: mihomo-party-org
+  maintainer: ABOLUOmathh
   category: Utility
   artifactName: clash-party-linux-${version}-${arch}.${ext}
 deb:
@@ -119,4 +108,7 @@ pacman:
     - wl-clipboard
   artifactName: clash-party-linux-${version}-${arch}.pkg.tar.zst
 npmRebuild: true
-publish: []
+publish:
+  provider: github
+  owner: ABOLUOmathh
+  repo: clash-party

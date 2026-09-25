@@ -81,6 +81,16 @@ vi.mock('../utils/dirs', () => ({
   overrideConfigPath: () => join(testDir, 'override.yaml'),
   overridePath: (id: string, ext: string) => join(testDir, 'overrides', `${id}.${ext}`)
 }))
+
+vi.mock('../resolve/mihomoActiveRuntime', () => ({
+  resolveActiveMihomoRuntime: () =>
+    Promise.resolve({
+      requestedCore: 'mihomo',
+      activeCore: 'mihomo',
+      activePath: join(testDir, 'mihomo'),
+      fallback: false
+    })
+}))
 vi.mock('../utils/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
@@ -338,7 +348,8 @@ describe('plugin subscription validation follow-ups (V6 regressions)', () => {
       expect.any(String),
       'mihomo',
       undefined,
-      expect.objectContaining({ signal: ac.signal, timeoutMs: expect.any(Number) })
+      expect.objectContaining({ signal: ac.signal, timeoutMs: expect.any(Number) }),
+      join(testDir, 'mihomo')
     )
   })
 

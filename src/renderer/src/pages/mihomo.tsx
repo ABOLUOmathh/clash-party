@@ -41,6 +41,8 @@ import {
   startSubStoreBackendServer,
   triggerSysProxy,
   fetchMihomoTags,
+  fetchCustomMihomoTags,
+  getMihomoRuntimeStatus,
   installSpecificMihomoCore,
   clearMihomoVersionCache,
   mihomoUpgradeUI
@@ -94,10 +96,11 @@ const DEFAULT_WEBUI_PANEL_URL = WEBUI_PANEL_OPTIONS[0].url
 
 const Mihomo: React.FC = () => {
   const { t } = useTranslation()
-  const { appConfig, patchAppConfig } = useAppConfig()
+  const { appConfig, patchAppConfig, mutateAppConfig } = useAppConfig()
   const {
     core = 'mihomo',
     specificVersion,
+    specificSource,
     enableSmartCore = false,
     enableSmartOverride = true,
     smartCoreUseLightGBM = false,
@@ -172,11 +175,14 @@ const Mihomo: React.FC = () => {
   const [lanOpen, setLanOpen] = useState(false)
   const { isOpen, onOpen, onClose } = useDisclosure()
   const [tags, setTags] = useState<{ name: string; zipball_url: string; tarball_url: string }[]>([])
+  const [coreSource, setCoreSource] = useState<'official' | 'custom'>('official')
   const [loadingTags, setLoadingTags] = useState(false)
   const [selectedTag, setSelectedTag] = useState(specificVersion || '')
   const [installing, setInstalling] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [runtimeStatus, setRuntimeStatus] =
+    useState<Awaited<ReturnType<typeof getMihomoRuntimeStatus>>>()
 
   // 生成随机端口 (范围 1024-65535)
   const generateRandomPort = () => Math.floor(Math.random() * (65535 - 1024 + 1)) + 1024
@@ -188,6 +194,27 @@ const Mihomo: React.FC = () => {
   useEffect(() => {
     setExternalUiUrlInput(externalUiUrl)
   }, [externalUiUrl])
+
+  useEffect(() => {
+    let cancelled = false
+
+    setRuntimeStatus(undefined)
+
+    void getMihomoRuntimeStatus()
+      .then((status) => {
+        if (!cancelled) setRuntimeStatus(status)
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Failed to resolve Mihomo runtime status:', error)
+          setRuntimeStatus(undefined)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [core, specificVersion, specificSource])
 
   const onChangeNeedRestart = async (patch: Partial<IMihomoConfig>): Promise<void> => {
     await patchControledMihomoConfig(patch)
@@ -268,10 +295,13 @@ const Mihomo: React.FC = () => {
   }
 
   // 获取 GitHub 标签列表（带缓存）
-  const fetchTags = async (forceRefresh = false) => {
+  const fetchTags = async (forceRefresh = false, source: 'official' | 'custom' = coreSource) => {
     setLoadingTags(true)
     try {
-      const data = await fetchMihomoTags(forceRefresh)
+      const data =
+        source === 'custom'
+          ? await fetchCustomMihomoTags(forceRefresh)
+          : await fetchMihomoTags(forceRefresh)
       setTags(Array.isArray(data) ? data : [])
     } catch (error: unknown) {
       console.error('Failed to fetch tags:', String(error))
@@ -288,17 +318,25 @@ const Mihomo: React.FC = () => {
 
     setInstalling(true)
     try {
-      // 下载并安装特定版本的核心
-      await installSpecificMihomoCore(selectedTag)
+      // 主进程完成 runtime transaction，并严格持久化 User Intent。
+      await installSpecificMihomoCore(selectedTag, coreSource)
 
-      // 更新应用配置
-      await patchAppConfig({
-        core: 'mihomo-specific',
-        specificVersion: selectedTag
-      })
+      // 刷新 renderer 中的配置快照；实际配置已经由主进程写盘成功。
+      mutateAppConfig()
 
-      // 重启核心
-      await restartCore()
+      // 使用刚提交的 User Intent 启动新 runtime。
+      try {
+        await restartCore()
+      } finally {
+        // Runtime/intent have already been committed at this point.
+        // Re-resolve even when process restart fails so the UI does not
+        // retain stale fallback state for an unchanged desired version.
+        try {
+          setRuntimeStatus(await getMihomoRuntimeStatus())
+        } catch (error) {
+          console.error('Failed to refresh Mihomo runtime status:', error)
+        }
+      }
 
       // 关闭模态框
       onClose()
@@ -327,15 +365,23 @@ const Mihomo: React.FC = () => {
 
   // 打开模态框时获取标签
   const handleOpenModal = async () => {
+    const source: 'official' | 'custom' =
+      core === 'mihomo-specific'
+        ? (specificSource ?? (specificVersion?.includes('-custom.') ? 'custom' : 'official'))
+        : core === 'mihomo'
+          ? 'custom'
+          : 'official'
+
+    setCoreSource(source)
+    setTags([])
     onOpen()
-    // 先显示缓存的标签（如果有）
-    if (tags.length === 0) {
-      await fetchTags(false) // 使用缓存
-    }
+
+    // 始终按当前来源读取标签；fetchTags 内部已有版本缓存。
+    await fetchTags(false, source)
 
     // 在后台检查更新
     setTimeout(() => {
-      fetchTags(true) // 强制刷新
+      void fetchTags(true, source)
     }, 100)
   }
 
@@ -346,10 +392,14 @@ const Mihomo: React.FC = () => {
 
   // 当模态框打开时，确保选中当前版本
   useEffect(() => {
-    if (isOpen && specificVersion) {
+    if (!isOpen) return
+
+    if (core === 'mihomo-specific' && specificVersion) {
       setSelectedTag(specificVersion)
+    } else {
+      setSelectedTag('')
     }
-  }, [isOpen, specificVersion])
+  }, [isOpen, core, specificVersion])
 
   return (
     <>
@@ -418,6 +468,17 @@ const Mihomo: React.FC = () => {
                       {specificVersion}
                     </Chip>
                   )}
+                  {core === 'mihomo-specific' && runtimeStatus?.fallback && (
+                    <Tooltip
+                      content={t('mihomo.runtimeFallbackTooltip')}
+                      placement="top"
+                      className="max-w-xs"
+                    >
+                      <Chip size="sm" variant="flat" color="warning">
+                        {t('mihomo.runtimeFallback')}
+                      </Chip>
+                    </Tooltip>
+                  )}
                 </div>
               }
               actions={
@@ -429,6 +490,15 @@ const Mihomo: React.FC = () => {
                     variant="light"
                     isLoading={upgrading}
                     onPress={async () => {
+                      const isCustomCore =
+                        core === 'mihomo' ||
+                        (core === 'mihomo-specific' && specificVersion?.includes('-custom.'))
+
+                      if (isCustomCore) {
+                        await handleOpenModal()
+                        return
+                      }
+
                       try {
                         setUpgrading(true)
                         await mihomoUpgrade()
@@ -1556,6 +1626,25 @@ const Mihomo: React.FC = () => {
           <ModalHeader className="flex app-drag">{t('mihomo.selectSpecificVersion')}</ModalHeader>
           <ModalBody>
             <div className="flex flex-col gap-4">
+              <Select
+                label="核心来源"
+                className="w-60"
+                selectedKeys={new Set([coreSource])}
+                onSelectionChange={(v) => {
+                  const source = v.currentKey as 'official' | 'custom'
+
+                  setCoreSource(source)
+                  setSelectedTag('')
+                  setTags([])
+
+                  void fetchTags(true, source)
+                }}
+              >
+                <SelectItem key="official">官方 Mihomo</SelectItem>
+
+                <SelectItem key="custom">自定义 Mihomo</SelectItem>
+              </Select>
+
               <div className="flex gap-2">
                 <Input
                   placeholder={t('mihomo.searchVersion')}

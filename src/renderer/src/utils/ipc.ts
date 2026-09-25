@@ -132,7 +132,18 @@ interface IpcApi {
   fetchMihomoTags: (
     forceRefresh?: boolean
   ) => Promise<{ name: string; zipball_url: string; tarball_url: string }[]>
-  installSpecificMihomoCore: (version: string) => Promise<void>
+  fetchCustomMihomoTags: (forceRefresh?: boolean) => Promise<unknown>
+  getMihomoRuntimeStatus: () => Promise<{
+    requestedCore: 'mihomo' | 'mihomo-alpha' | 'mihomo-smart' | 'mihomo-specific'
+    requestedVersion?: string
+    requestedSource?: 'official' | 'custom'
+    activeCore: 'mihomo' | 'mihomo-alpha' | 'mihomo-smart' | 'mihomo-specific'
+    activeVersion?: string
+    activeSource?: 'official' | 'custom'
+    fallback: boolean
+    fallbackReason?: string
+  }>
+  installSpecificMihomoCore: (version: string, source?: 'official' | 'custom') => Promise<void>
   clearMihomoVersionCache: () => Promise<void>
   // Backup
   webdavBackup: () => Promise<boolean>
@@ -152,6 +163,24 @@ interface IpcApi {
     frontendPort?: number
   }>
   downloadSubStore: () => Promise<void>
+  fetchCustomSubStoreReleases: (forceRefresh?: boolean) => Promise<
+    {
+      name: string
+      zipball_url: string
+      tarball_url: string
+    }[]
+  >
+  getSubStoreRuntimeState: () => Promise<
+    | {
+        version: string
+        source: string
+        asset: string
+        sha256: string
+        sourceCommit?: string
+      }
+    | undefined
+  >
+  installCustomSubStoreRuntime: (version: string) => Promise<void>
   subStorePort: () => Promise<number>
   subStoreFrontendPort: () => Promise<number>
   subStoreSubs: () => Promise<ISubStoreSub[]>
@@ -310,6 +339,8 @@ export const {
   downloadAndInstallUpdate,
   getVersion,
   fetchMihomoTags,
+  fetchCustomMihomoTags,
+  getMihomoRuntimeStatus,
   installSpecificMihomoCore,
   clearMihomoVersionCache,
   // Backup
@@ -327,6 +358,9 @@ export const {
   stopSubStoreBackendServer,
   ensureSubStoreServices,
   downloadSubStore,
+  fetchCustomSubStoreReleases,
+  getSubStoreRuntimeState,
+  installCustomSubStoreRuntime,
   subStorePort,
   subStoreFrontendPort,
   subStoreSubs,
