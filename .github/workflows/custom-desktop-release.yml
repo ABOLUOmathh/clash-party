@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version, e.g. 2.0.2-custom.10'
+        description: 'Release version, e.g. 2.0.3-custom.1'
         required: true
-        default: '2.0.2-custom.10'
+        default: '2.0.3-custom.1'
 
 permissions:
   contents: write
@@ -33,7 +33,7 @@ jobs:
         run: |
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-custom\.[0-9]+$ ]]; then
             echo "Invalid version: $VERSION"
-            echo "Expected format: 2.0.2-custom.10"
+            echo "Expected format: 2.0.3-custom.1"
             exit 1
           fi
 
@@ -304,19 +304,21 @@ jobs:
           cat > release-notes.md <<'EOF'
           Clash Party Custom release.
 
+          Upstream base: **2.0.3**
+
           Bundled components:
-          - Mihomo: v1.19.30-custom.6
-          - Sub-Store: 2.37.0-custom.5
+          - Mihomo: v1.19.31-custom.1
+          - Sub-Store: 2.41.0-custom.1
 
           HeySocks VLESS integration:
           - Preserve custom e/h parameters through Sub-Store VLESS URI parsing and Mihomo output
-          - Mihomo custom.6 implements the corresponding e/h wire compatibility
-          - Real-node A/B interoperability verified with REALITY + Vision
+          - Bundled Mihomo retains the corresponding e/h wire compatibility
+          - Preserve the previously verified REALITY + Vision interoperability path
 
           OneSocks integration:
           - Preserve and output Mihomo type: os nodes
           - Canonical os:// share-link import support
-          - Real-node end-to-end connectivity verified with the current UOT-enabled configuration
+          - Preserve the previously verified UOT-enabled OneSocks interoperability path
 
           Custom Mihomo features:
           - SOCKS5-over-WebSocket transport support
@@ -327,7 +329,7 @@ jobs:
           - Protection against replacing custom Mihomo through the upstream /upgrade path
 
           Additional integration:
-          - Fresh-install and built-in reinstall Sub-Store backend aligned to 2.37.0-custom.5
+          - Fresh-install and built-in reinstall Sub-Store backend aligned to 2.41.0-custom.1
           - Custom Sub-Store runtime selection remains available
           - macOS PKG postinstall uses the Clash Party Custom.app installation path
           EOF

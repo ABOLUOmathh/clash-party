@@ -1,3 +1,15 @@
+# 2.0.3-custom.1
+
+## 官方 2.0.3 同步与自定义组件更新
+
+- 基于官方 Clash Party 2.0.3，同步其新功能、性能优化与修复
+- 保留 Clash Party Custom 独立应用身份、更新通道、Custom Mihomo 持久运行时与 Custom Sub-Store 运行时
+- 内置 Mihomo 更新至 `v1.19.31-custom.1`
+- Fresh install 与内置重装的 Sub-Store 后端统一至 `2.41.0-custom.1`
+- 修复 Custom Mihomo 运行时状态 IPC 在 preload 白名单中的缺失
+- Custom tag 与官方构建工作流隔离，避免自定义发布误触发上游 release workflow
+- 保留 HeySocks VLESS e/h、OneSocks、HeySocks XHTTP、BLACKSTONE、SOCKS5-over-WebSocket 与 Custom Mihomo 升级保护
+
 # 2.0.3
 
 ## 新功能
