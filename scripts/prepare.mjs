@@ -88,7 +88,7 @@ async function getLatestSmartVersion() {
 }
 
 /* ======= mihomo release ======= */
-const CUSTOM_MIHOMO_RELEASE_TAG = 'v1.19.31-custom.1'
+const CUSTOM_MIHOMO_RELEASE_TAG = 'v1.19.32-custom.1'
 const CUSTOM_MIHOMO_URL_PREFIX = `https://github.com/ABOLUOmathh/mihomo/releases/download/${CUSTOM_MIHOMO_RELEASE_TAG}`
 
 const MIHOMO_MAP = {
@@ -448,7 +448,7 @@ const resolveSubstore = () =>
   resolveResource({
     file: 'sub-store.bundle.cjs',
     downloadURL:
-      'https://github.com/ABOLUOmathh/Sub-Store/releases/download/2.41.0-custom.1/sub-store.bundle.js'
+      'https://github.com/ABOLUOmathh/Sub-Store/releases/download/2.42.6-custom.1/sub-store.bundle.js'
   })
 const resolveHelper = () =>
   resolveResource({
