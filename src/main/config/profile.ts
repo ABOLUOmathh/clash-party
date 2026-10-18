@@ -19,7 +19,6 @@ import { checkProfileConfig, restartCore, type CheckProfileOptions } from '../co
 import { generateProfile, globalOverrideIdsNow } from '../core/factory'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
 import {
-  mihomoCorePath,
   mihomoProfileWorkDir,
   mihomoWorkDir,
   profileConfigPath,
@@ -647,12 +646,7 @@ export async function validateProfileCandidate(
   const candidatePath = join(candidateDir, 'config.yaml')
 
   try {
-    const {
-      core = 'mihomo',
-      operationMode,
-      specificVersion,
-      specificSource
-    } = await getAppConfig()
+    const { core = 'mihomo', operationMode, specificVersion, specificSource } = await getAppConfig()
     const baseProfile = await parseProfileContent(item.id, content, item.ageSecretKey)
     const runtime = await resolveActiveMihomoRuntime({
       core,
