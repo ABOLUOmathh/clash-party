@@ -146,10 +146,32 @@ import {
 } from '../traffic/database'
 import { getMihomoRuntimeStatus } from '../resolve/mihomoRuntimeStatus'
 import { installSpecificMihomoCore } from '../resolve/mihomoSpecificInstall'
+import {
+  getSimpleConfig,
+  getSimpleNode,
+  createSimpleNodes,
+  saveSimpleNode,
+  removeSimpleNode,
+  getSimpleProxyGroup,
+  getSimpleRulesEditor,
+  saveSimpleRules,
+  saveSimpleRuleProvider,
+  createSimpleProxyGroup,
+  saveSimpleProxyGroup,
+  removeSimpleProxyGroup,
+  reorderSimpleProxyGroups,
+  saveSimpleDraft,
+  previewSimpleConfig,
+  publishSimpleConfig,
+  exportSimpleConfig,
+  importSimpleSubscription,
+  refreshSimpleSource,
+  removeSimpleSource
+} from '../simple/service'
+import { setOperationMode } from '../simple/mode'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
-import { getIconDataURL } from './icon'
-import { getAppName } from './appName'
+import { getAppInfo } from './app-info'
 import { logDir, rulePath } from './dirs'
 // import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
 import { getGitHubTags, getGitHubReleases, clearVersionCache } from './github'
@@ -313,6 +335,27 @@ const asyncHandlers: Record<string, AsyncFn> = {
   getSmartOverrideContent,
   getRuleStr,
   setRuleStr,
+  getSimpleConfig,
+  getSimpleNode,
+  createSimpleNodes,
+  saveSimpleNode,
+  removeSimpleNode,
+  getSimpleProxyGroup,
+  getSimpleRulesEditor,
+  saveSimpleRules,
+  saveSimpleRuleProvider,
+  createSimpleProxyGroup,
+  saveSimpleProxyGroup,
+  removeSimpleProxyGroup,
+  reorderSimpleProxyGroups,
+  saveSimpleDraft,
+  previewSimpleConfig,
+  publishSimpleConfig,
+  exportSimpleConfig,
+  importSimpleSubscription,
+  refreshSimpleSource,
+  removeSimpleSource,
+  setOperationMode,
   readTextFile,
   // Core
   restartCore,
@@ -396,8 +439,7 @@ const asyncHandlers: Record<string, AsyncFn> = {
   measureLatency,
   getImageDataURL,
   readImageFileDataURL,
-  getIconDataURL,
-  getAppName,
+  getAppInfo,
   changeLanguage,
   setTitleBarOverlay,
   registerShortcut
