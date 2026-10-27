@@ -1,3 +1,11 @@
+# 2.0.4-custom.2
+
+## 自定义组件更新
+
+- 内置 Mihomo 更新至最新正式版 `v1.19.33-custom.1`
+- Fresh install 与内置重装的 Sub-Store 后端统一升级至最新正式版 `2.44.2-custom.1`
+- 完整保留 HeySocks VLESS e/h、OneSocks、HeySocks XHTTP、BLACKSTONE SS-2022、SOCKS5-over-WebSocket 与 Custom Mihomo 升级保护
+
 # 2.0.4-custom.1
 
 ## 官方 2.0.4 同步与自定义组件更新

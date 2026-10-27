@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version, e.g. 2.0.4-custom.1'
+        description: 'Release version, e.g. 2.0.4-custom.2'
         required: true
-        default: '2.0.4-custom.1'
+        default: '2.0.4-custom.2'
 
 permissions:
   contents: write
@@ -33,7 +33,7 @@ jobs:
         run: |
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-custom\.[0-9]+$ ]]; then
             echo "Invalid version: $VERSION"
-            echo "Expected format: 2.0.4-custom.1"
+            echo "Expected format: 2.0.4-custom.2"
             exit 1
           fi
 
@@ -307,8 +307,8 @@ jobs:
           Upstream base: **2.0.4**
 
           Bundled components:
-          - Mihomo: v1.19.32-custom.1
-          - Sub-Store: 2.42.6-custom.1
+          - Mihomo: v1.19.33-custom.1
+          - Sub-Store: 2.44.2-custom.1
 
           HeySocks VLESS integration:
           - Preserve custom e/h parameters through Sub-Store VLESS URI parsing and Mihomo output
@@ -329,7 +329,7 @@ jobs:
           - Protection against replacing custom Mihomo through the upstream /upgrade path
 
           Additional integration:
-          - Fresh-install and built-in reinstall Sub-Store backend aligned to 2.42.6-custom.1
+          - Fresh-install and built-in reinstall Sub-Store backend aligned to 2.44.2-custom.1
           - Custom Sub-Store runtime selection remains available
           - macOS PKG postinstall uses the Clash Party Custom.app installation path
           EOF
