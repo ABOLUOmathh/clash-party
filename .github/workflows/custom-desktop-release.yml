@@ -182,14 +182,16 @@ jobs:
   macos:
     name: macOS ${{ matrix.arch }}
     needs: meta
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
-        arch:
-          - x64
-          - arm64
+        include:
+          - arch: x64
+            os: macos-15-intel
+          - arch: arm64
+            os: macos-15
 
     steps:
       - name: Checkout
