@@ -1,3 +1,11 @@
+# 2.0.4-custom.3
+
+## 官方 smart_core 同步与自定义组件更新
+
+- 同步官方 smart_core 分支更新（proxy-provider 代理组重载优化、含空格路径脚本执行修复、本地配置文件模式重构与相关测试健全化）
+- Fresh install 与内置重装的 Sub-Store 后端统一升级至最新正式版 `2.44.5-custom.1`
+- 完整保留 HeySocks VLESS e/h、OneSocks、HeySocks XHTTP、BLACKSTONE SS-2022、SOCKS5-over-WebSocket 与 Custom Mihomo 升级保护
+
 # 2.0.4-custom.2
 
 ## 自定义组件更新
