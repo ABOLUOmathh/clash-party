@@ -89,7 +89,7 @@ export interface OperationContext {
 export interface OperationInput {
   item: IPluginItem
   vault?: IPluginVault
-  app: IAppConfig
+  app: Pick<IAppConfig, 'subscriptionTimeout' | 'pluginUseProxy'>
   retryPolicy: RetryPolicy
   budgetMs?: number
   initialRoute?: BaseRoute

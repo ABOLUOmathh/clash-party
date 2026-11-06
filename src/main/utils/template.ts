@@ -12,12 +12,12 @@ import {
   DEFAULT_NETWORK_INFO_CARD_ORDER,
   DEFAULT_SIDER_ORDER,
   DEFAULT_USE_SUB_STORE,
+  DEFAULT_YAML_MAX_ALIAS_COUNT,
   getDefaultMihomoTunDevice,
   DEFAULT_USE_NAMESERVER_POLICY
 } from '../../shared/appConfig'
 
 export const defaultConfig: IAppConfig = {
-  modeSelected: false,
   core: 'mihomo',
   enableSmartCore: false,
   enableSmartOverride: true,
@@ -53,6 +53,7 @@ export const defaultConfig: IAppConfig = {
   autoCloseConnection: true,
   autoCloseConnectionOnlyGroup: false,
   subscriptionTimeout: 30000,
+  yamlMaxAliasCount: DEFAULT_YAML_MAX_ALIAS_COUNT,
   gistAgeEncrypt: false,
   gistAgeRecipient: '',
   gistAgeSecretKey: '',

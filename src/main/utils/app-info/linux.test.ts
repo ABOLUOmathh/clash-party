@@ -13,6 +13,7 @@ vi.mock('child_process', () => ({
 
 let root: string
 const procLinks = new Map<string, string>()
+type ConnectionMetadata = Partial<IMihomoConnectionDetail['metadata']>
 function procLink(target: string, file: string): void {
   // procfs links contain Linux-specific values, not host filesystem symlink targets.
   write(file, '')
@@ -177,7 +178,7 @@ it('distinguishes shared helper connections by socket owner and parent cgroup', 
   )
   vi.spyOn(processes, 'getProcessIdentity').mockImplementation((pid) => identity(pid, procRoot))
   const { getLinuxAppInfo } = await import('./linux')
-  const metadata = {
+  const metadata: ConnectionMetadata = {
     network: 'tcp',
     sourceIP: '127.0.0.1',
     sourcePort: '50000',
@@ -291,7 +292,7 @@ it('does not enumerate processes for missing sockets and skips unrelated file de
   const readdir = vi.spyOn(fs.promises, 'readdir')
   const readlink = vi.spyOn(fs.promises, 'readlink')
   const { findConnectionPid } = await import('./linux-process')
-  const metadata = {
+  const metadata: ConnectionMetadata = {
     network: 'tcp',
     sourceIP: '127.0.0.1',
     sourcePort: '50001',

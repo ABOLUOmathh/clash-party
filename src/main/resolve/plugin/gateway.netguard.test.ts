@@ -1,11 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
-
-vi.mock('../../config/plugin', () => ({ getPluginItem: vi.fn() }))
-vi.mock('./vault', () => ({ readVault: vi.fn() }))
-
 import { challenge } from './gateway'
 import { runOperation } from './operation'
 import { singleRouteProvider } from './route'
+vi.mock('../../config/plugin', () => ({ getPluginItem: vi.fn() }))
+vi.mock('./vault', () => ({ readVault: vi.fn() }))
 
 const ITEM = {
   id: 'p',

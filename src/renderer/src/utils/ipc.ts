@@ -73,15 +73,27 @@ interface IpcApi {
   getCurrentProfileItem: () => Promise<IProfileItem>
   getProfileItem: (id: string | undefined) => Promise<IProfileItem>
   getProfileStr: (id: string) => Promise<string>
+  getProfileImportInfo: (
+    item: Pick<
+      IProfileItem,
+      | 'url'
+      | 'useProxy'
+      | 'userAgent'
+      | 'authToken'
+      | 'substore'
+      | 'allowFixedInterval'
+      | 'updateTimeout'
+    >
+  ) => Promise<Partial<IProfileItem>>
   setProfileStr: (id: string, str: string) => Promise<void>
   addProfileItem: (
     item: Partial<IProfileItem>,
-    simpleOptions?: import('../../../shared/simple-config').SimpleSubscriptionOptions
-  ) => Promise<void>
+    localOptions?: import('../../../shared/local-config').LocalSubscriptionOptions
+  ) => Promise<IProfileItem>
   removeProfileItem: (id: string) => Promise<void>
   updateProfileItem: (
     item: IProfileItem,
-    simpleOptions?: import('../../../shared/simple-config').SimpleSubscriptionOptions
+    localOptions?: import('../../../shared/local-config').LocalSubscriptionOptions
   ) => Promise<void>
   changeCurrentProfile: (id: string) => Promise<void>
   addProfileUpdater: (item: IProfileItem) => Promise<void>
@@ -103,73 +115,57 @@ interface IpcApi {
   getRuntimeConfigStr: () => Promise<string>
   getRuleStr: (id: string) => Promise<string>
   setRuleStr: (id: string, str: string) => Promise<void>
-  getSimpleConfig: () => Promise<import('../../../shared/simple-config').SimpleState>
-  getSimpleNode: (name?: string) => Promise<import('../../../shared/simple-config').SimpleObject>
-  createSimpleNodes: (
-    values: import('../../../shared/simple-config').SimpleObject[]
-  ) => Promise<void>
-  saveSimpleNode: (
+  getLocalConfig: () => Promise<import('../../../shared/local-config').LocalState>
+  getLocalNode: (name?: string) => Promise<import('../../../shared/local-config').LocalObject>
+  createLocalNodes: (values: import('../../../shared/local-config').LocalObject[]) => Promise<void>
+  saveLocalNode: (
     name: string,
-    value: import('../../../shared/simple-config').SimpleObject,
-    expected: import('../../../shared/simple-config').SimpleObject
+    value: import('../../../shared/local-config').LocalObject,
+    expected: import('../../../shared/local-config').LocalObject
   ) => Promise<void>
-  removeSimpleNode: (
+  removeLocalNode: (
     name: string,
-    expected: import('../../../shared/simple-config').SimpleObject
+    expected: import('../../../shared/local-config').LocalObject
   ) => Promise<void>
-  getSimpleRulesEditor: () => Promise<import('../../../shared/simple-config').SimpleRuleEditor>
-  saveSimpleRules: (
-    change: import('../../../shared/simple-config').SimpleRuleChange,
+  getLocalRulesEditor: () => Promise<import('../../../shared/local-config').LocalRuleEditor>
+  saveLocalRules: (
+    change: import('../../../shared/local-config').LocalRuleChange,
     expected: string[]
   ) => Promise<void>
-  saveSimpleRuleProvider: (
+  saveLocalRuleProvider: (
     name: string | undefined,
     nextName: string,
-    value: import('../../../shared/simple-config').SimpleObject | null,
-    expected?: import('../../../shared/simple-config').SimpleObject
+    value: import('../../../shared/local-config').LocalObject | null,
+    expected?: import('../../../shared/local-config').LocalObject
   ) => Promise<void>
-  getSimpleProxyGroup: (
+  getLocalProxyGroup: (
     name?: string
-  ) => Promise<import('../../../shared/simple-config').SimpleProxyGroupEditor>
-  createSimpleProxyGroup: (
-    value: import('../../../shared/simple-config').SimpleObject
+  ) => Promise<import('../../../shared/local-config').LocalProxyGroupEditor>
+  createLocalProxyGroup: (
+    value: import('../../../shared/local-config').LocalObject
   ) => Promise<void>
-  saveSimpleProxyGroup: (
+  saveLocalProxyGroup: (
     name: string,
-    value: import('../../../shared/simple-config').SimpleObject,
-    expected: import('../../../shared/simple-config').SimpleObject
+    value: import('../../../shared/local-config').LocalObject,
+    expected: import('../../../shared/local-config').LocalObject
   ) => Promise<void>
-  reorderSimpleProxyGroups: (names: string[]) => Promise<void>
-  removeSimpleProxyGroup: (
+  reorderLocalProxyGroups: (names: string[]) => Promise<void>
+  removeLocalProxyGroup: (
     name: string,
-    expected: import('../../../shared/simple-config').SimpleObject
+    expected: import('../../../shared/local-config').LocalObject
   ) => Promise<void>
-  saveSimpleDraft: (
-    draft: import('../../../shared/simple-config').SimpleDraft
-  ) => Promise<import('../../../shared/simple-config').SimplePreview>
-  previewSimpleConfig: () => Promise<import('../../../shared/simple-config').SimplePreview>
-  publishSimpleConfig: (
-    draft?: import('../../../shared/simple-config').SimpleDraft
-  ) => Promise<import('../../../shared/simple-config').SimplePreview>
-  exportSimpleConfig: () => Promise<
-    import('../../../shared/simple-config').SimplePreview & { path?: string }
+  saveLocalDraft: (
+    draft: import('../../../shared/local-config').LocalDraft
+  ) => Promise<import('../../../shared/local-config').LocalPreview>
+  previewLocalConfig: () => Promise<import('../../../shared/local-config').LocalPreview>
+  publishLocalConfig: (
+    draft?: import('../../../shared/local-config').LocalDraft
+  ) => Promise<import('../../../shared/local-config').LocalPreview>
+  exportLocalConfig: () => Promise<
+    import('../../../shared/local-config').LocalPreview & { path?: string }
   >
-  importSimpleSubscription: (input: {
-    name: string
-    url?: string
-    profileId?: string
-    mode: import('../../../shared/simple-config').SimpleSource['mode']
-    prefix?: string
-    interval?: number
-  }) => Promise<{
-    source: import('../../../shared/simple-config').SimpleSource
-    preview: import('../../../shared/simple-config').SimplePreview
-  }>
-  refreshSimpleSource: (
-    id: string
-  ) => Promise<import('../../../shared/simple-config').SimplePreview>
-  removeSimpleSource: (id: string) => Promise<import('../../../shared/simple-config').SimplePreview>
-  setOperationMode: (mode: 'standard' | 'simple') => Promise<void>
+  refreshLocalSource: (id: string) => Promise<import('../../../shared/local-config').LocalPreview>
+  removeLocalSource: (id: string) => Promise<import('../../../shared/local-config').LocalPreview>
   getFilePath: (ext: string[], title?: string, filterName?: string) => Promise<string[] | undefined>
   readTextFile: (filePath: string) => Promise<string>
   readImageFileDataURL: (filePath: string) => Promise<string>
@@ -356,6 +352,7 @@ export const {
   getCurrentProfileItem,
   getProfileItem,
   getProfileStr,
+  getProfileImportInfo,
   setProfileStr,
   addProfileItem,
   removeProfileItem,
@@ -380,27 +377,25 @@ export const {
   getRuntimeConfigStr,
   getRuleStr,
   setRuleStr,
-  getSimpleConfig,
-  getSimpleNode,
-  createSimpleNodes,
-  saveSimpleNode,
-  removeSimpleNode,
-  getSimpleProxyGroup,
-  getSimpleRulesEditor,
-  saveSimpleRules,
-  saveSimpleRuleProvider,
-  createSimpleProxyGroup,
-  saveSimpleProxyGroup,
-  removeSimpleProxyGroup,
-  reorderSimpleProxyGroups,
-  saveSimpleDraft,
-  previewSimpleConfig,
-  publishSimpleConfig,
-  exportSimpleConfig,
-  importSimpleSubscription,
-  refreshSimpleSource,
-  removeSimpleSource,
-  setOperationMode,
+  getLocalConfig,
+  getLocalNode,
+  createLocalNodes,
+  saveLocalNode,
+  removeLocalNode,
+  getLocalProxyGroup,
+  getLocalRulesEditor,
+  saveLocalRules,
+  saveLocalRuleProvider,
+  createLocalProxyGroup,
+  saveLocalProxyGroup,
+  removeLocalProxyGroup,
+  reorderLocalProxyGroups,
+  saveLocalDraft,
+  previewLocalConfig,
+  publishLocalConfig,
+  exportLocalConfig,
+  refreshLocalSource,
+  removeLocalSource,
   getFilePath,
   readTextFile,
   readImageFileDataURL,

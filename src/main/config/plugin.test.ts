@@ -2,13 +2,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-
-let TMP = ''
-vi.mock('../utils/dirs', () => ({
-  pluginConfigPath: () => join(TMP, 'plugin.yaml'),
-  appConfigPath: () => join(TMP, 'app.yaml')
-}))
-
 import {
   getPluginConfig,
   addPluginItem,
@@ -18,6 +11,11 @@ import {
   removePluginItem,
   normalizeDiscoveryMarker
 } from './plugin'
+let TMP = ''
+vi.mock('../utils/dirs', () => ({
+  pluginConfigPath: () => join(TMP, 'plugin.yaml'),
+  appConfigPath: () => join(TMP, 'app.yaml')
+}))
 
 function item(id: string): IPluginItem {
   return {
@@ -71,7 +69,7 @@ describe('plugin config CRUD', () => {
     await addPluginItem(item('dup'))
     await addPluginItem({ ...item('dup'), name: 'renamed' })
     const cfg = await getPluginConfig(true)
-    expect(cfg.items.filter((i) => i.id === 'dup')).toHaveLength(1)
+    expect(cfg.items.filter((i: { id: string }) => i.id === 'dup')).toHaveLength(1)
     expect((await getPluginItem('dup'))?.name).toBe('renamed')
   })
 })

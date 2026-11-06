@@ -10,10 +10,16 @@ import {
   setGlobalMaxLogFileSizeMB
 } from '../utils/logFile'
 import { setAppLogDisabled } from '../utils/logger'
+import { normalizeYamlMaxAliasCount } from '../../shared/appConfig'
 
 let appConfig: IAppConfig // config.yaml
+let legacyOperationMode: unknown
 const appConfigWriteQueue = new WriteQueue()
 const appConfigListeners = new Set<(config: IAppConfig) => void>()
+
+export function getLegacyOperationMode(): unknown {
+  return legacyOperationMode
+}
 
 function notifyAppConfigListeners(): void {
   for (const listener of appConfigListeners) listener(appConfig)
@@ -34,13 +40,15 @@ export async function getAppConfig(force = false): Promise<IAppConfig> {
     await appConfigWriteQueue.run(async () => {
       const data = await readFile(appConfigPath(), 'utf-8')
       const parsedConfig = parse(data)
-      const mergedConfig = deepMerge(cloneDefaultConfig(), parsedConfig || {})
-      // 配置文件已存在且来自旧版本时，沿用标准模式；只有新建配置保留首次选择门控。
-      if (parsedConfig && typeof parsedConfig === 'object' && !('modeSelected' in parsedConfig)) {
-        mergedConfig.modeSelected = true
-        mergedConfig.operationMode = 'standard'
+      if (parsedConfig && typeof parsedConfig === 'object' && legacyOperationMode === undefined) {
+        legacyOperationMode = (parsedConfig as Record<string, unknown>).operationMode ?? null
       }
+      const mergedConfig = deepMerge(cloneDefaultConfig(), parsedConfig || {})
+      const legacy = mergedConfig as unknown as Record<string, unknown>
+      delete legacy.operationMode
+      delete legacy.modeSelected
       mergedConfig.maxLogFileSize = normalizeMaxLogFileSizeMB(mergedConfig.maxLogFileSize)
+      mergedConfig.yamlMaxAliasCount = normalizeYamlMaxAliasCount(mergedConfig.yamlMaxAliasCount)
       if (JSON.stringify(mergedConfig) !== JSON.stringify(parsedConfig)) {
         await atomicWriteFile(appConfigPath(), stringify(mergedConfig))
       }
@@ -77,6 +85,7 @@ async function writeAppConfig(
       nextConfig.nameserverPolicy = patch.nameserverPolicy ?? {}
     }
     nextConfig.maxLogFileSize = normalizeMaxLogFileSizeMB(nextConfig.maxLogFileSize)
+    nextConfig.yamlMaxAliasCount = normalizeYamlMaxAliasCount(nextConfig.yamlMaxAliasCount)
     try {
       await atomicWriteFile(appConfigPath(), stringify(nextConfig))
     } catch (error) {

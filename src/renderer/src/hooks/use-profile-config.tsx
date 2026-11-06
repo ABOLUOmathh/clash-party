@@ -68,7 +68,9 @@ const ProfileConfigContextWrapper: React.FC<{ children: ReactNode }> = ({ childr
 
   const addProfileItem = useCallback(
     (item: Partial<IProfileItem>) =>
-      withErrorHandling(() => add(item), 'common.error.addProfileFailed')(),
+      withErrorHandling(async () => {
+        await add(item)
+      }, 'common.error.addProfileFailed')(),
     [withErrorHandling]
   )
 

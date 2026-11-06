@@ -1,5 +1,22 @@
+import { readFileSync } from 'fs'
+import { join } from 'path'
+import { createPrivateKey, sign } from 'crypto'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-
+import { getAppConfig } from '../../config/app'
+import { GatewayError } from './gateway'
+import { buildDiscoverySignInput } from './discovery-sig'
+import { sha256Hex } from './encoding'
+import { readVault as readVaultMock } from './vault'
+import {
+  previewPlugin,
+  installPlugin,
+  loginPlugin,
+  updatePluginProfile,
+  auditPluginVault,
+  removePlugin,
+  removePluginForProfile,
+  patchPluginItem
+} from './index'
 const profiles: Record<string, string> = {}
 const pluginItems: Record<string, IPluginItem> = {}
 const vaults: Record<string, IPluginVault> = {}
@@ -7,6 +24,12 @@ const unavailableVaults = new Set<string>()
 const invalidVaults = new Set<string>()
 const unwritableVaults = new Set<string>()
 let vaultPreflightUnavailable = false
+
+function profileIdOf(id: string): string {
+  const profileId = pluginItems[id]?.profileId
+  if (!profileId) throw new Error(`Plugin ${id} has no profile`)
+  return profileId
+}
 
 vi.mock('./vault', () => ({
   writeVault: vi.fn(async (id: string, v: IPluginVault) => {
@@ -115,25 +138,6 @@ vi.mock('./gateway', async (importOriginal) => {
   }
 })
 
-import { readFileSync } from 'fs'
-import { join } from 'path'
-import { createPrivateKey, sign } from 'crypto'
-import { getAppConfig } from '../../config/app'
-import { GatewayError } from './gateway'
-import { buildDiscoverySignInput } from './discovery-sig'
-import { sha256Hex } from './encoding'
-import { readVault as readVaultMock } from './vault'
-import {
-  previewPlugin,
-  installPlugin,
-  loginPlugin,
-  updatePluginProfile,
-  auditPluginVault,
-  removePlugin,
-  removePluginForProfile,
-  patchPluginItem
-} from './index'
-
 const CLASH =
   'proxies:\n  - {name: a, type: ss, server: 1.1.1.1, port: 8388, cipher: aes-128-gcm, password: x}\n'
 const WK = {
@@ -212,7 +216,7 @@ describe('loginPlugin', () => {
     const rec = pluginItems[item.id]
     expect(rec.status).toBe('active')
     expect(rec.profileId).toBeDefined()
-    expect(profiles[rec.profileId!]).toBe(CLASH)
+    expect(profiles[profileIdOf(item.id)]).toBe(CLASH)
     const vault = vaults[item.id]
     expect(Buffer.from(vault.devicePrivKey, 'base64')).toHaveLength(32)
     expect(vault.gateway.gateway).toBe('https://gw.front.com')
@@ -348,13 +352,13 @@ describe('updatePluginProfile', () => {
   it('transient failure keeps old profile + sets backoff', async () => {
     const item = await installPlugin(file())
     await loginPlugin(item.id)
-    const before = profiles[pluginItems[item.id].profileId!]
+    const before = profiles[profileIdOf(item.id)]
     fetchConfig.mockRejectedValueOnce(new GatewayError('transient', 'timeout'))
     await updatePluginProfile(item.id)
     expect(pluginItems[item.id].status).toBe('active')
     expect(pluginItems[item.id].failureCount).toBe(1)
     expect(pluginItems[item.id].nextRetryAt).toBeGreaterThan(Date.now())
-    expect(profiles[pluginItems[item.id].profileId!]).toBe(before)
+    expect(profiles[profileIdOf(item.id)]).toBe(before)
   })
 
   it('temporary vault unavailability keeps the plugin active and backs off', async () => {
@@ -489,7 +493,7 @@ describe('removePlugin', () => {
   it('best-effort revokes then removes profile + record + vault', async () => {
     const item = await installPlugin(file())
     await loginPlugin(item.id)
-    const pid = pluginItems[item.id].profileId!
+    const pid = profileIdOf(item.id)
     await removePlugin(item.id)
     expect(revoke).toHaveBeenCalled()
     expect(pluginItems[item.id]).toBeUndefined()
@@ -544,13 +548,13 @@ describe('plugin lock', () => {
     slow.resolve({ yaml: CLASH })
     await Promise.all([first, second])
     expect(fetchConfig).toHaveBeenCalledTimes(3)
-    expect(profiles[pluginItems[item.id].profileId!]).toBe(NEW_CLASH)
+    expect(profiles[profileIdOf(item.id)]).toBe(NEW_CLASH)
   })
 
   it('removePlugin during an update: the update abandons its commit, nothing is resurrected', async () => {
     const item = await installPlugin(file())
     await loginPlugin(item.id)
-    const pid = pluginItems[item.id].profileId!
+    const pid = profileIdOf(item.id)
     const slow = deferred<{ yaml: string }>()
     fetchConfig.mockReturnValueOnce(slow.promise)
     const update = updatePluginProfile(item.id, true)
@@ -577,7 +581,7 @@ describe('plugin lock', () => {
     fetchConfig.mockReturnValueOnce(slow.promise)
     const update = updatePluginProfile(item.id, true)
     await new Promise((r) => setTimeout(r, 5))
-    const removal = removePluginForProfile(item.id, pluginItems[item.id].profileId!)
+    const removal = removePluginForProfile(item.id, profileIdOf(item.id))
     slow.resolve({ yaml: NEW_CLASH })
     await Promise.all([update, removal])
     expect(revoke).toHaveBeenCalled()
@@ -617,7 +621,7 @@ describe('route mode persistence (§1)', () => {
     vi.mocked(getAppConfig).mockResolvedValueOnce({
       subscriptionTimeout: 5000,
       pluginUseProxy: true
-    })
+    } as unknown as IAppConfig)
     const viaProxy = await installPlugin(file())
     expect(viaProxy.routeMode).toBe('proxy')
     expect(viaProxy.useProxy).toBe(true)
@@ -752,7 +756,7 @@ describe('gateway recovery (§2.4)', () => {
     expect(vaults[id].gateway.lastGood).toBe(GW2)
     expect(vaults[id].gateway.gateway).toBe(GW2)
     expect(vaults[id].gateway.gateways).toEqual([GW1, GW2])
-    expect(profiles[pluginItems[id].profileId!]).toBe(NEW_CLASH)
+    expect(profiles[profileIdOf(id)]).toBe(NEW_CLASH)
   })
 
   it('starts from lastGood, then the rest in order', async () => {
@@ -1763,7 +1767,7 @@ describe('R2 login flow and deletion fixes', () => {
   it('BL-002: a fetched subscription rejected by core validation keeps the old profile and backs off as server', async () => {
     const item = await installPlugin(file())
     await loginPlugin(item.id)
-    const pid = pluginItems[item.id].profileId!
+    const pid = profileIdOf(item.id)
     const { upsertPluginProfile: upsert } = await import('../../config/profile')
     vi.mocked(upsert).mockRejectedValueOnce(
       Object.assign(new Error("proxy 'x' not found"), { code: 'PLUGIN_PROFILE_INVALID' })
@@ -1801,7 +1805,7 @@ describe('R2 login flow and deletion fixes', () => {
   it('BL-003: changing autoUpdate / interval through the IPC patch syncs the profile schedule', async () => {
     const item = await installPlugin(file())
     await loginPlugin(item.id)
-    const pid = pluginItems[item.id].profileId!
+    const pid = profileIdOf(item.id)
     const { syncPluginProfileSchedule: sync } = await import('../../config/profile')
     vi.mocked(sync).mockClear()
     await patchPluginItem(item.id, { autoUpdate: false })
@@ -1850,7 +1854,8 @@ describe('R2 login flow and deletion fixes', () => {
     const { upsertPluginProfile: upsert } = await import('../../config/profile')
     vi.mocked(upsert).mockImplementationOnce(async (_m, _c, signal?: AbortSignal) => {
       // the core check outlived the budget: the signal fires, the profile write refuses to land
-      await new Promise<void>((resolve) => signal!.addEventListener('abort', () => resolve()))
+      if (!signal) throw new Error('missing abort signal')
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve()))
       throw Object.assign(new Error('aborted'), { code: 'PLUGIN_PROFILE_INVALID' })
     })
     vi.useFakeTimers()
@@ -1924,7 +1929,7 @@ describe('codex-review fixes', () => {
   it('ISS-001: profiles-list cascade removes the profile even when an in-flight update re-created it', async () => {
     const item = await installPlugin(file())
     await loginPlugin(item.id)
-    const pid = pluginItems[item.id].profileId!
+    const pid = profileIdOf(item.id)
     const slow = deferred<{ yaml: string }>()
     fetchConfig.mockReturnValueOnce(slow.promise)
     const update = updatePluginProfile(item.id, true)

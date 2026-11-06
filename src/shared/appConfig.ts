@@ -10,6 +10,16 @@ export const DEFAULT_ENABLE_TRAFFIC_LOGGER = true
 
 export const DEFAULT_USE_SUB_STORE = true
 
+export const DEFAULT_YAML_MAX_ALIAS_COUNT = 100
+
+export function normalizeYamlMaxAliasCount(value: unknown): number {
+  if (value === -1) return -1
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    return DEFAULT_YAML_MAX_ALIAS_COUNT
+  }
+  return value
+}
+
 export const DEFAULT_SIDER_ORDER: SiderCardKey[] = [
   'sysproxy',
   'tun',

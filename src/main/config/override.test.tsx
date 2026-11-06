@@ -13,6 +13,8 @@ import {
   updateOverrideItem
 } from './override'
 
+void React
+
 let testDir = ''
 
 vi.mock('../utils/dirs', () => ({
@@ -49,7 +51,8 @@ describe('legacy numeric override IDs', () => {
     writeConfig(yamlId)
     const config = await getOverrideConfig(true)
     // SortableContext probes object IDs with `in`; null would throw here.
-    const ids = JSON.parse(JSON.stringify(config)).items.map((item: IOverrideItem) => item.id)
+    const parsed = JSON.parse(JSON.stringify(config)) as { items: Array<{ id: string }> }
+    const ids = parsed.items.map((item) => item.id)
     expect(() =>
       renderToString(<SortableContext items={ids}>{null}</SortableContext>)
     ).not.toThrow()

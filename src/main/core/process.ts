@@ -1,16 +1,18 @@
-import { exec, execFile } from 'child_process'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { readdir, rm } from 'fs/promises'
 import { existsSync } from 'fs'
+import path from 'path'
 import { managerLogger } from '../utils/logger'
+import { mihomoCoreDir } from '../utils/dirs'
 import { getAxios } from './mihomoApi'
 
-const execPromise = promisify(exec)
 const execFilePromise = promisify(execFile)
 
 // 常量
 const CORE_READY_MAX_RETRIES = 30
 const CORE_READY_RETRY_INTERVAL_MS = 100
+const windowsCoreExecutables = ['mihomo.exe', 'mihomo-alpha.exe', 'mihomo-smart.exe']
 
 export async function cleanupSocketFile(): Promise<void> {
   if (process.platform === 'win32') {
@@ -22,69 +24,78 @@ export async function cleanupSocketFile(): Promise<void> {
 
 // thorough=true 走 PowerShell 慢路径，仅在外部控制器监听冲突时使用
 export async function cleanupWindowsNamedPipes(thorough = false): Promise<void> {
-  if (!thorough) {
-    try {
-      const { stdout } = await execFilePromise(
-        'tasklist',
-        ['/FI', 'IMAGENAME eq mihomo*', '/FO', 'CSV', '/NH'],
-        { windowsHide: true, timeout: 1500, maxBuffer: 1 * 1024 * 1024 }
-      )
-
-      const pids: number[] = []
-      for (const line of stdout.split('\n')) {
-        const match = line.match(/^"([^"]+)","(\d+)"/)
-        if (!match) continue
-        const pid = parseInt(match[2], 10)
-        if (!isNaN(pid) && pid !== process.pid) pids.push(pid)
-      }
-
-      if (pids.length === 0) return
-
-      for (const pid of pids) {
-        await terminateProcess(pid)
-      }
-
-      // 给进程留出退出窗口，避免 pipe 占用导致后续启动失败
-      await new Promise((resolve) => setTimeout(resolve, 200))
-    } catch (error) {
-      managerLogger.warn('Lightweight pipe cleanup failed:', error)
-    }
-    return
-  }
-
   try {
-    try {
-      const { stdout } = await execPromise(
-        `powershell -NoProfile -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Process | Where-Object {$_.ProcessName -like '*mihomo*'} | Select-Object Id,ProcessName | ConvertTo-Json"`,
-        { encoding: 'utf8' }
-      )
+    const pids = await findWindowsCorePids(thorough ? 5000 : 1500)
+    if (pids.length === 0) return
 
-      if (stdout.trim()) {
-        managerLogger.info(`Found potential pipe-blocking processes: ${stdout}`)
-
-        try {
-          const processes = JSON.parse(stdout)
-          const processArray = Array.isArray(processes) ? processes : [processes]
-
-          for (const proc of processArray) {
-            const pid = proc.Id
-            if (pid && pid !== process.pid) {
-              await terminateProcess(pid)
-            }
-          }
-        } catch (parseError) {
-          managerLogger.warn('Failed to parse process list JSON:', parseError)
-          await fallbackTextParsing(stdout)
-        }
-      }
-    } catch (error) {
-      managerLogger.warn('Failed to check mihomo processes:', error)
+    managerLogger.info(`Found potential pipe-blocking core processes: ${pids.join(',')}`)
+    for (const pid of pids) {
+      await terminateProcess(pid)
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    // 给进程留出退出窗口，避免 pipe 占用导致后续启动失败
+    await new Promise((resolve) => setTimeout(resolve, thorough ? 1000 : 200))
   } catch (error) {
-    managerLogger.error('Windows named pipe cleanup failed:', error)
+    managerLogger.warn('Windows named pipe cleanup failed:', error)
   }
+}
+
+async function findWindowsCorePids(timeout: number): Promise<number[]> {
+  const { stdout } = await execFilePromise('tasklist', ['/FO', 'CSV', '/NH'], {
+    windowsHide: true,
+    timeout,
+    maxBuffer: 4 * 1024 * 1024
+  })
+
+  const candidates: number[] = []
+  for (const line of stdout.split('\n')) {
+    const match = line.match(/^"([^"]+)","(\d+)"/)
+    if (!match || !windowsCoreExecutables.includes(match[1].toLowerCase())) continue
+    const pid = parseInt(match[2], 10)
+    if (!isNaN(pid) && pid !== process.pid) candidates.push(pid)
+  }
+  if (candidates.length === 0) return []
+
+  let processInfo = ''
+  try {
+    const result = await execFilePromise(
+      'powershell',
+      [
+        '-NoProfile',
+        '-Command',
+        `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Process -Id ${candidates.join(',')} -ErrorAction SilentlyContinue | Select-Object Id,Path | ConvertTo-Json -Compress`
+      ],
+      { windowsHide: true, timeout: timeout + 2500, maxBuffer: 4 * 1024 * 1024 }
+    )
+    processInfo = result.stdout.trim()
+  } catch (error) {
+    managerLogger.warn('Failed to inspect core process paths:', error)
+    return candidates
+  }
+  if (!processInfo) return []
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(processInfo)
+  } catch (error) {
+    managerLogger.warn('Failed to parse core process paths:', error)
+    return candidates
+  }
+
+  const corePaths = windowsCoreExecutables.map((name) =>
+    path.win32.resolve(mihomoCoreDir(), name).toLowerCase()
+  )
+  const pids: number[] = []
+  for (const proc of Array.isArray(parsed) ? parsed : [parsed]) {
+    const { Id: pid, Path: exePath } = (proc ?? {}) as { Id?: unknown; Path?: unknown }
+    if (typeof pid !== 'number' || !candidates.includes(pid)) continue
+    if (typeof exePath !== 'string' || !exePath) {
+      pids.push(pid)
+    } else if (corePaths.includes(path.win32.resolve(exePath).toLowerCase())) {
+      pids.push(pid)
+    }
+  }
+  return pids
 }
 
 async function terminateProcess(pid: number): Promise<void> {
@@ -95,19 +106,6 @@ async function terminateProcess(pid: number): Promise<void> {
   } catch (error: unknown) {
     if ((error as { code?: string })?.code !== 'ESRCH') {
       managerLogger.warn(`Failed to terminate process ${pid}:`, error)
-    }
-  }
-}
-
-async function fallbackTextParsing(stdout: string): Promise<void> {
-  const lines = stdout.split('\n').filter((line) => line.includes('mihomo'))
-  for (const line of lines) {
-    const match = line.match(/(\d+)/)
-    if (match) {
-      const pid = parseInt(match[1])
-      if (pid !== process.pid) {
-        await terminateProcess(pid)
-      }
     }
   }
 }

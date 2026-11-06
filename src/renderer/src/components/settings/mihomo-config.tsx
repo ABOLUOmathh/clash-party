@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { toast } from '@renderer/components/base/toast'
 import { Button, Input, Select, SelectItem, Switch, Tooltip } from '@heroui/react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
@@ -15,6 +15,7 @@ import { BiCopy, BiDownload, BiKey } from 'react-icons/bi'
 import { IoIosHelpCircle } from 'react-icons/io'
 import { platform, version } from '@renderer/utils/init'
 import { useTranslation } from 'react-i18next'
+import { DEFAULT_YAML_MAX_ALIAS_COUNT } from '../../../../shared/appConfig'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
 
@@ -46,6 +47,7 @@ const MihomoConfig: React.FC = () => {
     delayTestUrl,
     userAgent,
     subscriptionTimeout = 30000,
+    yamlMaxAliasCount = DEFAULT_YAML_MAX_ALIAS_COUNT,
     mihomoCpuPriority = 'PRIORITY_NORMAL',
     coreStartupMode = 'log',
     proxyCols = 'auto',
@@ -53,6 +55,7 @@ const MihomoConfig: React.FC = () => {
     ssidProfileRestore = false
   } = appConfig || {}
   const [url, setUrl] = useState(delayTestUrl)
+  const [yamlMaxAliasCountInput, setYamlMaxAliasCountInput] = useState(String(yamlMaxAliasCount))
   const [pauseSSIDInput, setPauseSSIDInput] = useState(pauseSSID)
   const [ssidProfileEntriesInput, setSsidProfileEntriesInput] = useState<SsidProfileEntry[]>(() =>
     Object.entries(ssidProfileMap).map(([ssid, profileId]) => ({
@@ -67,6 +70,9 @@ const MihomoConfig: React.FC = () => {
   const setUaDebounce = debounce((v: string) => {
     patchAppConfig({ userAgent: v })
   }, 500)
+  useEffect(() => {
+    setYamlMaxAliasCountInput(String(yamlMaxAliasCount))
+  }, [yamlMaxAliasCount])
   const [isGeneratingGistAgeKey, setIsGeneratingGistAgeKey] = useState(false)
   const [isExportingGistAgeKey, setIsExportingGistAgeKey] = useState(false)
   const handleGenerateGistAgeKeyPair = async (): Promise<void> => {
@@ -164,6 +170,43 @@ const MihomoConfig: React.FC = () => {
           />
           <span className="text-default-500">{t('common.seconds')}</span>
         </div>
+      </SettingItem>
+      <SettingItem
+        title={t('mihomo.yamlMaxAliasCount')}
+        actions={
+          <Tooltip content={t('mihomo.yamlMaxAliasCount.tooltip')}>
+            <Button isIconOnly size="sm" variant="light">
+              <IoIosHelpCircle className="text-lg" />
+            </Button>
+          </Tooltip>
+        }
+        divider
+      >
+        <Input
+          size="sm"
+          className="w-25"
+          type="number"
+          min={-1}
+          value={yamlMaxAliasCountInput}
+          aria-label={t('mihomo.yamlMaxAliasCount')}
+          onValueChange={setYamlMaxAliasCountInput}
+          onBlur={async () => {
+            const value = yamlMaxAliasCountInput.trim()
+            const next = Number(value)
+            if (!value || !Number.isInteger(next) || next < -1) {
+              setYamlMaxAliasCountInput(String(yamlMaxAliasCount))
+              return
+            }
+            if (
+              (next === -1 || next > DEFAULT_YAML_MAX_ALIAS_COUNT) &&
+              !window.confirm(t('mihomo.yamlMaxAliasCount.warning'))
+            ) {
+              setYamlMaxAliasCountInput(String(yamlMaxAliasCount))
+              return
+            }
+            await patchAppConfig({ yamlMaxAliasCount: next })
+          }}
+        />
       </SettingItem>
       <SettingItem title={t('mihomo.delayTest.url')} divider>
         <Input

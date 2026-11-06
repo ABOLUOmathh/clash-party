@@ -109,7 +109,10 @@ export function autoRouteProvider(
 
 // 读时推导（§1.5 五行迁移表），严格对应旧 netOpts 的继承语义：
 // routeMode 有 → 取其值；无 → useProxy=true → proxy，false → auto；都无 → 全局 true → proxy，否则 auto。
-export function effectiveRouteMode(item: IPluginItem, app: IAppConfig): IPluginRouteMode {
+export function effectiveRouteMode(
+  item: IPluginItem,
+  app: Pick<IAppConfig, 'pluginUseProxy'>
+): IPluginRouteMode {
   if (isRouteMode(item.routeMode)) return item.routeMode
   if (typeof item.useProxy === 'boolean') return item.useProxy ? 'proxy' : 'auto'
   return app.pluginUseProxy ? 'proxy' : 'auto'
@@ -117,7 +120,7 @@ export function effectiveRouteMode(item: IPluginItem, app: IAppConfig): IPluginR
 
 export function createRouteProvider(
   item: IPluginItem,
-  app: IAppConfig,
+  app: Pick<IAppConfig, 'pluginUseProxy'>,
   initialRoute?: BaseRoute,
   resolveProxy?: ProxyResolver
 ): RouteProvider {

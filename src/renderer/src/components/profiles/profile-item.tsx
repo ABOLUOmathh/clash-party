@@ -5,6 +5,10 @@ import {
   DropdownItem,
   DropdownMenu,
   DropdownTrigger,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalHeader,
   Tooltip
 } from '@heroui/react'
 import { IoMdMore, IoMdRefresh } from 'react-icons/io'
@@ -12,11 +16,13 @@ import dayjs from '@renderer/utils/dayjs'
 import React, { Key, useMemo, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { openFile, updatePluginProfile } from '@renderer/utils/ipc'
+import { exportLocalConfig, openFile, updatePluginProfile } from '@renderer/utils/ipc'
+import { toast } from '@renderer/components/base/toast'
+import { useProfileConfig } from '@renderer/hooks/use-profile-config'
 import { useTranslation } from 'react-i18next'
-import { useAppConfig } from '@renderer/hooks/use-app-config'
 import BaseConfirmModal from '../base/base-confirm-modal'
-import EditRulesModal from './edit-rules-modal'
+import LocalNodes from '../local/local-nodes'
+import { isLocalProfile } from '../../../../shared/local-config'
 import EditTunnelsModal from './edit-tunnels-modal'
 import EditInfoModal from './edit-info-modal'
 import EditFileModal from './edit-file-modal'
@@ -26,6 +32,7 @@ import ProfileCardContent from './profile-card-content'
 interface Props {
   info: IProfileItem
   isCurrent: boolean
+  isSource?: boolean
   addProfileItem: (item: Partial<IProfileItem>) => Promise<void>
   updateProfileItem: (item: IProfileItem) => Promise<void>
   removeProfileItem: (id: string) => Promise<void>
@@ -42,10 +49,10 @@ interface MenuItem {
 }
 const ProfileItem: React.FC<Props> = (props) => {
   const { t } = useTranslation()
-  const { appConfig } = useAppConfig()
-  const simpleMode = appConfig?.operationMode === 'simple'
+  const { changeCurrentProfile } = useProfileConfig()
   const {
     info,
+    isSource = false,
     addProfileItem,
     removeProfileItem,
     mutateProfileConfig,
@@ -56,9 +63,9 @@ const ProfileItem: React.FC<Props> = (props) => {
   const [updating, setUpdating] = useState(false)
   const [openInfoEditor, setOpenInfoEditor] = useState(false)
   const [openFileEditor, setOpenFileEditor] = useState(false)
-  const [openRulesEditor, setOpenRulesEditor] = useState(false)
   const [openTunnelsEditor, setOpenTunnelsEditor] = useState(false)
   const [openQrCode, setOpenQrCode] = useState(false)
+  const [openLocalNodes, setOpenLocalNodes] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const {
@@ -87,13 +94,6 @@ const ProfileItem: React.FC<Props> = (props) => {
       {
         key: 'edit-file',
         label: t('profiles.editFile.title'),
-        showDivider: false,
-        color: 'default',
-        className: ''
-      } as MenuItem,
-      {
-        key: 'edit-rules',
-        label: t('profiles.editRules.title'),
         showDivider: false,
         color: 'default',
         className: ''
@@ -129,7 +129,7 @@ const ProfileItem: React.FC<Props> = (props) => {
         className: ''
       } as MenuItem)
     }
-    if (info.home) {
+    if (info.customHome || info.home) {
       list.unshift({
         key: 'home',
         label: t('profiles.home'),
@@ -138,10 +138,28 @@ const ProfileItem: React.FC<Props> = (props) => {
         className: ''
       } as MenuItem)
     }
-    return simpleMode
-      ? list.filter((item) => !['edit-rules', 'edit-tunnels'].includes(item.key))
-      : list
-  }, [info, t, simpleMode])
+    if (isLocalProfile(info)) {
+      list.splice(
+        3,
+        0,
+        {
+          key: 'local-nodes',
+          label: t('profiles.localNodes'),
+          showDivider: false,
+          color: 'default',
+          className: ''
+        },
+        {
+          key: 'local-export',
+          label: t('profiles.exportLocal'),
+          showDivider: true,
+          color: 'default',
+          className: ''
+        }
+      )
+    }
+    return isSource ? list.filter((item) => item.key !== 'edit-tunnels') : list
+  }, [info, t, isSource])
 
   const onMenuAction = async (key: Key): Promise<void> => {
     switch (key) {
@@ -151,10 +169,6 @@ const ProfileItem: React.FC<Props> = (props) => {
       }
       case 'edit-file': {
         setOpenFileEditor(true)
-        break
-      }
-      case 'edit-rules': {
-        setOpenRulesEditor(true)
         break
       }
       case 'edit-tunnels': {
@@ -175,7 +189,23 @@ const ProfileItem: React.FC<Props> = (props) => {
         break
       }
       case 'home': {
-        open(info.home)
+        open(info.customHome || info.home)
+        break
+      }
+      case 'local-nodes': {
+        if (!isCurrent) await changeCurrentProfile(info.id)
+        setOpenLocalNodes(true)
+        break
+      }
+      case 'local-export': {
+        if (!isCurrent) await changeCurrentProfile(info.id)
+        try {
+          const result = await exportLocalConfig()
+          if (result.path) toast.success(result.path)
+          else if (result.errors.length) toast.error(result.errors.join('\n'))
+        } catch (error) {
+          toast.error(String(error))
+        }
         break
       }
     }
@@ -238,10 +268,22 @@ const ProfileItem: React.FC<Props> = (props) => {
       }}
     >
       {openFileEditor && <EditFileModal id={info.id} onClose={() => setOpenFileEditor(false)} />}
-      {!simpleMode && openRulesEditor && (
-        <EditRulesModal id={info.id} onClose={() => setOpenRulesEditor(false)} />
+      {openLocalNodes && (
+        <Modal
+          size="3xl"
+          scrollBehavior="inside"
+          isOpen
+          onOpenChange={() => setOpenLocalNodes(false)}
+        >
+          <ModalContent>
+            <ModalHeader>{t('profiles.localNodes')}</ModalHeader>
+            <ModalBody>
+              <LocalNodes />
+            </ModalBody>
+          </ModalContent>
+        </Modal>
       )}
-      {!simpleMode && openTunnelsEditor && (
+      {!isSource && openTunnelsEditor && (
         <EditTunnelsModal id={info.id} onClose={() => setOpenTunnelsEditor(false)} />
       )}
       {openQrCode && info.url && (
@@ -289,14 +331,14 @@ const ProfileItem: React.FC<Props> = (props) => {
             isCurrent={isCurrent}
             actions={
               <div className="flex">
-                {(info.type === 'remote' || info.type === 'plugin') && (
+                {(info.type === 'remote' || info.pluginId) && (
                   <Tooltip placement="left" content={dayjs(info.updated).fromNow()}>
                     <Button
                       isIconOnly
                       size="sm"
                       variant="light"
                       color="default"
-                      disabled={updating || (info.type === 'plugin' && !info.pluginId)}
+                      disabled={updating}
                       onPress={async () => {
                         try {
                           setUpdating(true)

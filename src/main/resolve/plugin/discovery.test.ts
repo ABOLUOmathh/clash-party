@@ -1,18 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-
-const requestOnce = vi.fn()
-vi.mock('./http-client', () => ({ requestOnce: (...a: unknown[]) => requestOnce(...a) }))
-vi.mock('../../config/plugin', () => ({ getPluginItem: vi.fn() }))
-vi.mock('./vault', () => ({ readVault: vi.fn() }))
-
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { createPrivateKey, sign } from 'crypto'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { discoverGateway } from './discovery'
 import { buildDiscoverySignInput } from './discovery-sig'
 import { CPX_GUARD_REFUSED, CPX_TIMEOUT, codedError } from './errors'
 import { runOperation, type OperationContext } from './operation'
 import { autoRouteProvider } from './route'
+const requestOnce = vi.fn()
+vi.mock('./http-client', () => ({ requestOnce: (...a: unknown[]) => requestOnce(...a) }))
+vi.mock('../../config/plugin', () => ({ getPluginItem: vi.fn() }))
+vi.mock('./vault', () => ({ readVault: vi.fn() }))
 
 const OK = {
   spec: 'cpx-plugin/2',

@@ -164,12 +164,12 @@ export function mihomoWorkConfigPath(id: string | undefined): string {
   }
 }
 
-export function simpleConfigPath(): string {
-  return path.join(dataDir(), 'simple-config.yaml')
+export function localConfigPath(): string {
+  return path.join(dataDir(), 'local-config.yaml')
 }
 
-export function simpleOutputPath(): string {
-  return path.join(dataDir(), 'simple-config.generated.yaml')
+export function localOutputPath(): string {
+  return path.join(dataDir(), 'local-config.generated.yaml')
 }
 
 export function logDir(): string {

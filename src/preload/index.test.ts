@@ -9,7 +9,7 @@ vi.mock('electron', () => ({
 const isolated = Object.getOwnPropertyDescriptor(process, 'contextIsolated')
 afterEach(() => {
   if (isolated) Object.defineProperty(process, 'contextIsolated', isolated)
-  else delete process.contextIsolated
+  else Object.defineProperty(process, 'contextIsolated', { configurable: true, value: undefined })
   vi.unstubAllGlobals()
 })
 

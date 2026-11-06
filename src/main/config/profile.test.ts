@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { addProfileUpdater } from '../core/profileUpdater'
 import { getOverrideConfig, updateOverrideConfig } from './override'
 import {
+  addProfileItem,
   createProfile,
+  getProfileImportInfo,
   getProfileConfig,
   getProfileItem,
   removeProfileItem,
@@ -17,7 +19,14 @@ import {
 
 let testDir = ''
 
+async function requireProfileItem(id: string) {
+  const item = await getProfileItem(id)
+  if (!item) throw new Error(`Profile ${id} was not found`)
+  return item
+}
+
 const mocks = vi.hoisted(() => ({
+  axiosHead: vi.fn(),
   axiosGet: vi.fn(),
   checkProfileConfig: vi.fn(),
   getPluginItem: vi.fn(),
@@ -29,7 +38,8 @@ const mocks = vi.hoisted(() => ({
   beforeWrite: vi.fn(),
   generateProfile: vi.fn(),
   hotReload: vi.fn(),
-  restartCore: vi.fn()
+  restartCore: vi.fn(),
+  yamlMaxAliasCount: 100
 }))
 
 vi.mock('electron', () => ({ app: { getVersion: () => '2.0.0' } }))
@@ -61,11 +71,13 @@ vi.mock('../core/factory', async () => {
   return {
     generateProfile: mocks.generateProfile,
     globalOverrideIdsNow: async () =>
-      (await getOverrideConfig()).items.filter((o) => o.global).map((o) => o.id)
+      (await getOverrideConfig()).items
+        .filter((o: { global?: boolean }) => o.global)
+        .map((o: { id: string }) => o.id)
   }
 })
 vi.mock('i18next', () => ({ default: { t: (key: string) => key } }))
-vi.mock('axios', () => ({ default: { get: mocks.axiosGet } }))
+vi.mock('axios', () => ({ default: { get: mocks.axiosGet, head: mocks.axiosHead } }))
 vi.mock('../utils/age', () => ({
   decryptAgeContent: (content: string) => Promise.resolve(content)
 }))
@@ -78,7 +90,7 @@ vi.mock('../utils/dirs', () => ({
     return join(testDir, 'profile.yaml')
   },
   profilePath: (id: string) => join(testDir, 'profiles', `${id}.yaml`),
-  simpleConfigPath: () => join(testDir, 'simple-config.yaml'),
+  localConfigPath: () => join(testDir, 'local-config.yaml'),
   overrideConfigPath: () => join(testDir, 'override.yaml'),
   overridePath: (id: string, ext: string) => join(testDir, 'overrides', `${id}.${ext}`)
 }))
@@ -117,7 +129,8 @@ vi.mock('./app', () => ({
     Promise.resolve({
       core: 'mihomo',
       subscriptionTimeout: 30000,
-      userAgent: 'mihomo.party/v2.0.0 (clash.meta)'
+      userAgent: 'mihomo.party/v2.0.0 (clash.meta)',
+      yamlMaxAliasCount: mocks.yamlMaxAliasCount
     })
 }))
 vi.mock('./controledMihomo', () => ({
@@ -164,9 +177,11 @@ beforeEach(async () => {
     data: newProfile,
     headers: { 'content-type': 'text/yaml' }
   })
+  mocks.axiosHead.mockResolvedValue({ status: 200, headers: {} })
   mocks.generateProfile.mockResolvedValue('remote')
   mocks.checkProfileConfig.mockResolvedValue(undefined)
   mocks.hotReload.mockResolvedValue(undefined)
+  mocks.yamlMaxAliasCount = 100
   // the plugin record the schedule is read from at write time
   mocks.getPluginItem.mockResolvedValue({ id: 'pg', interval: 60, autoUpdate: true })
   // the module caches must match the freshly written files (all real writes go through the queue and keep them in sync)
@@ -174,20 +189,54 @@ beforeEach(async () => {
   await getOverrideConfig(true)
 })
 
-const globalOverride = (id: string): IOverrideItem => ({
-  id,
-  type: 'local',
-  ext: 'yaml',
-  name: id,
-  updated: 1,
-  global: true
-})
+const globalOverride = (id: string) =>
+  ({
+    id,
+    type: 'local',
+    ext: 'yaml',
+    name: id,
+    updated: 1,
+    global: true
+  }) as const
 
 afterEach(() => {
   rmSync(testDir, { recursive: true, force: true })
 })
 
 describe('remote profile candidate validation', () => {
+  const aliasedProfile = [
+    'base: &base',
+    '  type: http',
+    '  server: 127.0.0.1',
+    '  port: 8080',
+    'proxies:',
+    ...Array.from({ length: 120 }, (_, i) => `  - <<: *base\n    name: p${i}`),
+    ''
+  ].join('\n')
+
+  it('uses the configured YAML alias limit for trusted subscriptions', async () => {
+    mocks.axiosGet.mockResolvedValue({
+      status: 200,
+      data: aliasedProfile,
+      headers: { 'content-type': 'text/yaml' }
+    })
+
+    await expect(
+      createProfile({ id: 'remote', type: 'remote', name: 'Remote', url: 'https://example.test' })
+    ).rejects.toThrow('Excessive alias count')
+
+    mocks.yamlMaxAliasCount = 200
+    await expect(
+      createProfile({ id: 'remote', type: 'remote', name: 'Remote', url: 'https://example.test' })
+    ).resolves.toMatchObject({ id: 'remote' })
+    expect(readFileSync(join(testDir, 'profiles', 'remote.yaml'), 'utf8')).toBe(aliasedProfile)
+
+    mocks.yamlMaxAliasCount = -1
+    await expect(
+      createProfile({ id: 'remote', type: 'remote', name: 'Remote', url: 'https://example.test' })
+    ).resolves.toMatchObject({ id: 'remote' })
+  })
+
   it('keeps the last-known-good profile when semantic validation fails', async () => {
     mocks.checkProfileConfig.mockRejectedValueOnce(new Error("proxy 'missing-group' not found"))
 
@@ -214,6 +263,108 @@ describe('remote profile candidate validation', () => {
     expect(mocks.checkProfileConfig).toHaveBeenCalledOnce()
     expect(readFileSync(join(testDir, 'profiles', 'remote.yaml'), 'utf8')).toBe(newProfile)
     expect(mocks.hotReload).toHaveBeenCalledOnce()
+  })
+})
+
+describe('custom profile homepage', () => {
+  const getRemoteProfile = async () => {
+    const item = await getProfileItem('remote')
+    if (!item) throw new Error('Missing remote profile')
+    return item
+  }
+
+  it('preserves a custom homepage across subscription updates and restores the supplied homepage when cleared', async () => {
+    const item = {
+      ...(await getRemoteProfile()),
+      url: 'https://example.test/subscription',
+      customHome: '  https://custom.example.test  '
+    }
+    await updateProfileItem(item)
+    for (const home of ['https://provider.example.test', undefined]) {
+      mocks.axiosGet.mockResolvedValueOnce({
+        status: 200,
+        data: newProfile,
+        headers: { 'content-type': 'text/yaml', 'profile-web-page-url': home }
+      })
+      await addProfileItem(await getRemoteProfile())
+      expect(await getProfileItem('remote')).toMatchObject({
+        customHome: 'https://custom.example.test'
+      })
+    }
+
+    mocks.axiosGet.mockResolvedValueOnce({
+      status: 200,
+      data: newProfile,
+      headers: { 'content-type': 'text/yaml', 'profile-web-page-url': 'https://new.example.test' }
+    })
+    await updateProfileItem({ ...(await getRemoteProfile()), customHome: '' })
+    await addProfileItem(await getRemoteProfile())
+    expect((await getProfileConfig(true)).items[0]).toMatchObject({
+      home: 'https://new.example.test'
+    })
+    expect((await getRemoteProfile()).customHome).toBeUndefined()
+  })
+
+  it.each(['invalid', 'javascript:alert(1)', 'file:///tmp/example'])(
+    'rejects unsupported homepage %s without changing the saved profile',
+    async (customHome) => {
+      const original = await getRemoteProfile()
+      await expect(updateProfileItem({ ...original, customHome })).rejects.toThrow()
+      await expect(createProfile({ ...original, customHome })).rejects.toThrow()
+      expect(await getProfileItem('remote')).toEqual(original)
+      expect(mocks.axiosGet).not.toHaveBeenCalled()
+    }
+  )
+})
+
+describe('remote profile import metadata', () => {
+  it('reads metadata from HEAD before importing', async () => {
+    mocks.axiosHead.mockResolvedValueOnce({
+      status: 200,
+      headers: {
+        'content-disposition': 'attachment; filename="my-profile.yaml"',
+        'profile-web-page-url': 'https://example.test/home',
+        'profile-update-interval': '12',
+        'subscription-userinfo': 'upload=1; download=2; total=3; expire=4'
+      }
+    })
+
+    await expect(
+      getProfileImportInfo({
+        url: 'https://example.test/sub',
+        useProxy: false,
+        substore: false,
+        allowFixedInterval: false
+      })
+    ).resolves.toMatchObject({
+      name: 'my-profile.yaml',
+      home: 'https://example.test/home',
+      interval: 720,
+      extra: { upload: 1, download: 2, total: 3, expire: 4 }
+    })
+    expect(mocks.axiosHead).toHaveBeenCalledOnce()
+    expect(mocks.axiosGet).not.toHaveBeenCalled()
+  })
+
+  it('uses response headers and URL name when HEAD has no metadata', async () => {
+    mocks.axiosHead.mockResolvedValueOnce({ status: 200, headers: {} })
+    mocks.axiosGet.mockResolvedValueOnce({
+      status: 200,
+      data: '',
+      headers: { 'profile-web-page-url': 'https://example.test/home' }
+    })
+
+    await expect(
+      getProfileImportInfo({
+        url: 'https://example.test/my-profile.yaml',
+        useProxy: false,
+        substore: false,
+        allowFixedInterval: false
+      })
+    ).resolves.toMatchObject({
+      name: 'my-profile',
+      home: 'https://example.test/home'
+    })
   })
 })
 
@@ -312,7 +463,7 @@ describe('plugin subscription validation (BL-002)', () => {
     expect(vi.mocked(addProfileUpdater)).toHaveBeenCalledOnce()
     expect(vi.mocked(addProfileUpdater).mock.calls[0][0]).toMatchObject({
       id: 'plugin1',
-      type: 'plugin',
+      type: 'local',
       autoUpdate: true,
       interval: 60
     })
@@ -356,10 +507,10 @@ describe('plugin subscription validation follow-ups (V6 regressions)', () => {
 
   it('does not revert a user override changed while the core was validating', async () => {
     await upsertPluginProfile(meta, newProfile)
-    await updateProfileItem({ ...(await getProfileItem('plugin1'))!, override: ['A'] })
+    await updateProfileItem({ ...(await requireProfileItem('plugin1')), override: ['A'] })
     // the validator "takes a while"; meanwhile the user switches the override to B
     mocks.checkProfileConfig.mockImplementationOnce(async () => {
-      await updateProfileItem({ ...(await getProfileItem('plugin1'))!, override: ['B'] })
+      await updateProfileItem({ ...(await requireProfileItem('plugin1')), override: ['B'] })
     })
     await upsertPluginProfile(meta, oldProfile)
     expect((await getProfileItem('plugin1'))?.override).toEqual(['B'])
@@ -417,10 +568,10 @@ describe('plugin subscription validation follow-ups (V7 regressions)', () => {
 
   it('R2-ISS-053: an override enabled during validation triggers a re-validation against the new set before the write', async () => {
     await upsertPluginProfile(meta, newProfile)
-    await updateProfileItem({ ...(await getProfileItem('plugin1'))!, override: ['A'] })
+    await updateProfileItem({ ...(await requireProfileItem('plugin1')), override: ['A'] })
     mocks.generateProfile.mockClear()
     mocks.checkProfileConfig.mockImplementationOnce(async () => {
-      await updateProfileItem({ ...(await getProfileItem('plugin1'))!, override: ['A', 'B'] })
+      await updateProfileItem({ ...(await requireProfileItem('plugin1')), override: ['A', 'B'] })
     })
     await upsertPluginProfile(meta, oldProfile)
     // validated once against [A], then again against [A, B]; the write happened after the second pass
@@ -450,11 +601,13 @@ describe('plugin subscription validation follow-ups (V7 regressions)', () => {
     await upsertPluginProfile(meta, newProfile)
     mocks.generateProfile.mockClear()
     // the recorded set is [G]; G is off while the config is generated and back on before the commit check
-    mocks.generateProfile.mockImplementationOnce(async (_c, o) => {
-      expect(o?.globalOverrideIds).toEqual(['G']) // generation uses the recorded set, not a fresh read
-      await updateOverrideConfig(() => ({ items: [] }))
-      return 'remote'
-    })
+    mocks.generateProfile.mockImplementationOnce(
+      async (_c: unknown, o?: { globalOverrideIds?: string[] }) => {
+        expect(o?.globalOverrideIds).toEqual(['G']) // generation uses the recorded set, not a fresh read
+        await updateOverrideConfig(() => ({ items: [] }))
+        return 'remote'
+      }
+    )
     mocks.checkProfileConfig.mockImplementationOnce(async () => {
       await updateOverrideConfig(() => ({ items: [globalOverride('G')] }))
     })
@@ -479,7 +632,7 @@ describe('plugin subscription validation follow-ups (V7 regressions)', () => {
     // the toggle was queued behind the commit's critical section (shared runtime-config write queue)
     expect(landedDuringWrite).toBe(false)
     await toggle
-    expect((await getOverrideConfig()).items.map((i) => i.id)).toEqual(['G'])
+    expect((await getOverrideConfig()).items.map((i: { id: string }) => i.id)).toEqual(['G'])
     // what landed was validated against the set that was current at the write: no globals
     expect(mocks.generateProfile).toHaveBeenCalledTimes(1)
     expect(mocks.generateProfile.mock.calls[0][1]).toMatchObject({ globalOverrideIds: [] })
@@ -494,8 +647,8 @@ describe('plugin subscription validation follow-ups (V7 regressions)', () => {
       await updateOverrideConfig(() => ({ items: [globalOverride('NEW')] }))
     })
     const forced = await getOverrideConfig(true)
-    expect(forced.items.map((i) => i.id)).toEqual(['NEW'])
-    expect((await getOverrideConfig()).items.map((i) => i.id)).toEqual(['NEW'])
+    expect(forced.items.map((i: { id: string }) => i.id)).toEqual(['NEW'])
+    expect((await getOverrideConfig()).items.map((i: { id: string }) => i.id)).toEqual(['NEW'])
   })
 
   it('R2-ISS-065: a budget that expires while the commit waits for the write queue aborts the commit without writing', async () => {
@@ -551,7 +704,7 @@ describe('plugin subscription validation follow-ups (V7 regressions)', () => {
     let n = 0
     mocks.checkProfileConfig.mockImplementation(async () => {
       n++
-      await updateProfileItem({ ...(await getProfileItem('plugin1'))!, override: [`O${n}`] })
+      await updateProfileItem({ ...(await requireProfileItem('plugin1')), override: [`O${n}`] })
     })
     await expect(upsertPluginProfile(meta, oldProfile)).rejects.toMatchObject({
       code: 'PLUGIN_PROFILE_INVALID'

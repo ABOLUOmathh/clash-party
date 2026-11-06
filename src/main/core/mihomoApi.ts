@@ -3,6 +3,7 @@ import axios, { AxiosInstance } from 'axios'
 import WebSocket from 'ws'
 import { app } from 'electron'
 import { getAppConfig, getControledMihomoConfig, manageSmartOverride } from '../config'
+import { isLocalProfile } from '../../shared/local-config'
 import { mainWindow } from '../window'
 import { tray } from '../resolve/tray'
 import { calcTraffic } from '../utils/calc'
@@ -453,7 +454,9 @@ export const mihomoHotReloadConfig = async (): Promise<void> => {
   await manageSmartOverride()
   const { profileId: current, dnsGuard } = await generateProfile()
   const appConfig = await getAppConfig()
-  const diffWorkDir = appConfig.operationMode === 'simple' ? false : appConfig.diffWorkDir === true
+  const { getProfileItem } = await import('../config/profile')
+  const localActive = isLocalProfile(await getProfileItem(current))
+  const diffWorkDir = localActive ? false : appConfig.diffWorkDir === true
   const configPath = diffWorkDir ? mihomoWorkConfigPath(current) : mihomoWorkConfigPath('work')
   mihomoApiLogger.info(`hot reload config path: ${configPath}`)
   const instance = await getAxios()

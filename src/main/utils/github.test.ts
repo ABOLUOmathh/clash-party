@@ -73,7 +73,7 @@ vi.mock('./logger', () => ({
 
 describe('Mihomo GitHub persistent runtime installer wiring', () => {
   let tempDir = ''
-  let stagedBinary = Buffer.alloc(0)
+  let stagedBinary: Buffer = Buffer.alloc(0)
   let lastOptions: InstallPreparedMihomoRuntimeOptions | undefined
 
   function releaseName(platform: 'linux' | 'win32'): string {

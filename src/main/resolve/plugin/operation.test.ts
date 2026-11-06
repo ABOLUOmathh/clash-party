@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-
+import { KeyedWriteQueue } from '../../utils/safeFile'
+import { CPX_GUARD_REFUSED, CPX_REDIRECT_REFUSED, CPX_TIMEOUT, codedError } from './errors'
+import {
+  createBudget,
+  runOperation,
+  runPluginOperation,
+  withPluginLock,
+  markPluginRemoved,
+  PluginNotFoundError,
+  type OperationContext
+} from './operation'
+import { abortable, autoRouteProvider, singleRouteProvider, type RouteProvider } from './route'
 const requestOnce = vi.fn()
 vi.mock('./http-client', () => ({ requestOnce: (...a: unknown[]) => requestOnce(...a) }))
 
@@ -14,19 +25,6 @@ vi.mock('./vault', () => ({
   )
 }))
 
-import { KeyedWriteQueue } from '../../utils/safeFile'
-import { CPX_GUARD_REFUSED, CPX_REDIRECT_REFUSED, CPX_TIMEOUT, codedError } from './errors'
-import {
-  createBudget,
-  runOperation,
-  runPluginOperation,
-  withPluginLock,
-  markPluginRemoved,
-  PluginNotFoundError,
-  type OperationContext
-} from './operation'
-import { abortable, autoRouteProvider, singleRouteProvider, type RouteProvider } from './route'
-
 const ITEM: IPluginItem = {
   id: 'p1',
   name: 'XX',
@@ -36,10 +34,11 @@ const ITEM: IPluginItem = {
   created: 0,
   updated: 0
 }
-const APP: IAppConfig = { subscriptionTimeout: 5000 }
+const APP = { subscriptionTimeout: 5000 }
 const PROXY = { host: '127.0.0.1', port: 7890 }
 const GW = {
   gateway: 'https://gw.front.com',
+  gateways: ['https://gw.front.com'],
   endpoints: { enroll: '/enroll', challenge: '/challenge', config: '/config', revoke: '/revoke' }
 }
 
@@ -455,8 +454,10 @@ describe('route fallback (§1)', () => {
   const timeoutErr = (): Error => codedError('Request timed out', CPX_TIMEOUT, 'pre-send')
   const errno = (code: string, phase: 'pre-send' | 'possibly-sent'): Error =>
     codedError(code, code, phase)
-  const req = (ctx: OperationContext, url = 'https://gw.front.com/x'): Promise<unknown> =>
-    ctx.requester.request(url, { method: 'GET', maxBytes: 10 })
+  const req = (
+    ctx: OperationContext,
+    url = 'https://gw.front.com/x'
+  ): Promise<{ status: number }> => ctx.requester.request(url, { method: 'GET', maxBytes: 10 })
   const base = (over: Record<string, unknown> = {}) => ({
     item: { ...ITEM, routeMode: 'auto' as const },
     app: { subscriptionTimeout: 30000 },

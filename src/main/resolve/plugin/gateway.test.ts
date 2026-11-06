@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-
-const requestOnce = vi.fn()
-vi.mock('./http-client', () => ({ requestOnce: (...a: unknown[]) => requestOnce(...a) }))
-
 import { enroll, challenge, fetchConfig, revoke, GatewayError } from './gateway'
 import { generateDevice, buildSignInput, verifyRequest, OP_CONFIG, OP_REVOKE } from './device'
+const requestOnce = vi.fn()
+vi.mock('./http-client', () => ({ requestOnce: (...a: unknown[]) => requestOnce(...a) }))
 
 const TARGET = {
   gateway: 'https://gw.front.com',
@@ -21,9 +19,12 @@ function jsonReply(body: unknown, status = 200): void {
 function rawReply(body: string, status = 200): void {
   requestOnce.mockResolvedValueOnce({ status, headers: {}, body })
 }
-function lastBody(): any {
+function lastBody(): Record<string, unknown> & { ts: number; sig: string } {
   const call = requestOnce.mock.calls[requestOnce.mock.calls.length - 1]
-  return JSON.parse((call[1] as { body: string }).body)
+  return JSON.parse((call[1] as { body: string }).body) as Record<string, unknown> & {
+    ts: number
+    sig: string
+  }
 }
 
 beforeEach(() => requestOnce.mockReset())

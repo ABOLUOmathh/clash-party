@@ -55,9 +55,10 @@ async function waitFor(cond: () => boolean, ms = 1000): Promise<void> {
 
 function start(handler: http.RequestListener): Promise<string> {
   return new Promise((resolve) => {
-    server = http.createServer(handler)
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server!.address()
+    const serverInstance = http.createServer(handler)
+    server = serverInstance
+    serverInstance.listen(0, '127.0.0.1', () => {
+      const addr = serverInstance.address()
       const port = typeof addr === 'object' && addr ? addr.port : 0
       resolve(`http://127.0.0.1:${port}`)
     })
@@ -380,7 +381,7 @@ describe('requestOnce', () => {
       socket.once('data', () => {
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
         socket.once('data', (d) => {
-          hello = d
+          hello = Buffer.isBuffer(d) ? d : Buffer.from(d)
           socket.destroy()
         })
       })
@@ -518,7 +519,7 @@ describe('requestOnce', () => {
       })
     )
     let lookups = 0
-    const lookup = ((hostname: string, options: unknown, callback?: unknown): void => {
+    const lookup = ((_hostname: string, options: unknown, callback?: unknown): void => {
       lookups++
       const cb = (typeof options === 'function' ? options : callback) as (
         err: null,

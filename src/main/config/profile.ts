@@ -18,16 +18,16 @@ import { mihomoCloseAllConnections, mihomoHotReloadConfig } from '../core/mihomo
 import { checkProfileConfig, restartCore, type CheckProfileOptions } from '../core/manager'
 import { generateProfile, globalOverrideIdsNow } from '../core/factory'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
-import {
-  mihomoProfileWorkDir,
-  mihomoWorkDir,
-  profileConfigPath,
-  profilePath,
-  simpleConfigPath
-} from '../utils/dirs'
+import { mihomoProfileWorkDir, mihomoWorkDir, profileConfigPath, profilePath } from '../utils/dirs'
 import { createLogger } from '../utils/logger'
 import { atomicWriteFile } from '../utils/safeFile'
-import type { SimpleSubscriptionOptions } from '../../shared/simple-config'
+import { isHttpUrl } from '../utils/url'
+import type { LocalSubscriptionOptions } from '../../shared/local-config'
+import {
+  isLocalProfile,
+  LEGACY_SIMPLE_PROFILE_ID,
+  LOCAL_PROFILE_ID
+} from '../../shared/local-config'
 import { getAppConfig } from './app'
 import { getControledMihomoConfig } from './controledMihomo'
 import { getPluginItem, pluginSchedule } from './plugin'
@@ -189,30 +189,79 @@ export async function changeCurrentProfile(id: string): Promise<void> {
   }
 }
 
+function normalizeCustomHome(value?: string): string | undefined {
+  const home = value?.trim()
+  if (!home) return undefined
+  try {
+    const { protocol } = new URL(home)
+    if (protocol === 'http:' || protocol === 'https:') return home
+  } catch {
+    // Report invalid URLs with the same message as unsupported protocols.
+  }
+  throw new Error(i18next.t('profiles.editInfo.invalidHome'))
+}
+
+export async function ensureLocalProfileItem(): Promise<IProfileItem> {
+  const config = await getProfileConfig(true)
+  const existing = config.items.find(
+    (candidate) => candidate.id === LOCAL_PROFILE_ID || candidate.id === LEGACY_SIMPLE_PROFILE_ID
+  )
+  if (existing?.id === LOCAL_PROFILE_ID && existing.type === 'local' && existing.name)
+    return existing
+  const translated: unknown = i18next.t('profiles.localProfile')
+  const item: IProfileItem = {
+    id: LOCAL_PROFILE_ID,
+    type: 'local',
+    name:
+      typeof translated === 'string' && translated && translated !== 'profiles.localProfile'
+        ? translated
+        : '本地配置',
+    updated: Date.now()
+  }
+  await updateProfileConfig((next) => {
+    next.items = next.items.filter(
+      (candidate) =>
+        candidate.id === existing?.id ||
+        (candidate.id !== LOCAL_PROFILE_ID && candidate.id !== LEGACY_SIMPLE_PROFILE_ID)
+    )
+    const index = next.items.findIndex((candidate) => candidate.id === existing?.id)
+    if (index === -1) next.items.push(item)
+    else next.items[index] = { ...next.items[index], ...item }
+    if (next.current === existing?.id) next.current = LOCAL_PROFILE_ID
+    return next
+  })
+  const { BrowserWindow } = await import('electron')
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send('profileConfigUpdated')
+  }
+  return item
+}
+
 export async function updateProfileItem(
   item: IProfileItem,
-  simpleOptions?: SimpleSubscriptionOptions
+  sourceOptions?: LocalSubscriptionOptions
 ): Promise<void> {
-  const previous = simpleOptions ? await getProfileItem(item.id) : undefined
+  const customHome = normalizeCustomHome(item.customHome)
+  const previous = await getProfileItem(item.id)
   await updateProfileConfig((config) => {
     const index = config.items.findIndex((i) => i.id === item.id)
     if (index === -1) {
       throw new Error('Profile not found')
     }
-    config.items[index] = item
+    config.items[index] = { ...item, customHome }
     return config
   })
-  if (simpleOptions && (await getAppConfig()).operationMode === 'simple') {
+  if (sourceOptions) {
     try {
-      const { configureSimpleSubscription } = await import('../simple/service')
-      await configureSimpleSubscription(item.id, simpleOptions)
+      const { configureLocalSource } = await import('../local/service')
+      await configureLocalSource(item.id, sourceOptions)
     } catch (error) {
       if (previous) {
         await updateProfileItem(previous)
         try {
           await mihomoHotReloadConfig()
         } catch (restoreError) {
-          profileLogger.error('Failed to restore simple subscription settings', restoreError)
+          profileLogger.error('Failed to restore subscription source settings', restoreError)
         }
       }
       throw error
@@ -222,9 +271,16 @@ export async function updateProfileItem(
 
 export async function addProfileItem(
   item: Partial<IProfileItem>,
-  simpleOptions?: SimpleSubscriptionOptions
-): Promise<void> {
+  sourceOptions?: LocalSubscriptionOptions
+): Promise<IProfileItem> {
+  const { getLocalState } = await import('../local/store')
+  const localState = await getLocalState()
+  const isLocalSource = (profileId: string): boolean =>
+    [...localState.draft.sources, ...localState.published.sources].some(
+      (source) => source.profileId === profileId
+    )
   const newItem = await createProfile(item)
+  const sourceProfile = sourceOptions !== undefined || isLocalSource(newItem.id)
   let shouldChangeCurrent = false
   let newProfileIsCurrentAfterUpdate = false
   await updateProfileConfig((config) => {
@@ -234,18 +290,18 @@ export async function addProfileItem(
     } else {
       config.items.push(newItem)
     }
-    if (!config.current) {
+    if (!config.current && !sourceProfile) {
       shouldChangeCurrent = true
       newProfileIsCurrentAfterUpdate = true
     }
     return config
   })
 
-  if ((await getAppConfig()).operationMode === 'simple') {
-    const { configureSimpleSubscription } = await import('../simple/service')
+  if (sourceProfile) {
+    const { configureLocalSource } = await import('../local/service')
     await addProfileUpdater(newItem)
-    await configureSimpleSubscription(newItem.id, simpleOptions)
-    return
+    await configureLocalSource(newItem.id, sourceOptions)
+    return newItem
   }
 
   // If the new profile will become the current profile, ensure generateProfile is called
@@ -265,11 +321,12 @@ export async function addProfileItem(
     await changeCurrentProfile(newItem.id)
   }
   await addProfileUpdater(newItem)
+  return newItem
 }
 
 export async function removeProfileItem(id: string): Promise<void> {
   const item = await getProfileItem(id)
-  if (item?.type === 'plugin' && item.pluginId) {
+  if (item?.pluginId) {
     // 级联删除插件：tombstone → plugin lock → revoke → profile → item → vault 在同一个临界区内完成。
     // profile 记录由插件侧在锁内删除，避免在途更新的 upsertPluginProfile 在取锁前把它重建出来。
     const { removePluginForProfile } = await import('../resolve/plugin')
@@ -282,10 +339,12 @@ export async function removeProfileItem(id: string): Promise<void> {
 }
 
 export function withProfileRemoval<T>(id: string, remove: () => Promise<T>): Promise<T> {
-  if (!id || !existsSync(simpleConfigPath())) return remove()
-  return import('../simple/service').then(({ withSimpleProfileRemoval }) =>
-    withSimpleProfileRemoval(id, remove)
-  )
+  return getProfileItem(id).then((item) => {
+    if (!id || !isLocalProfile(item)) return remove()
+    return import('../local/service').then(({ withLocalProfileRemoval }) =>
+      withLocalProfileRemoval(id, remove)
+    )
+  })
 }
 
 // 正在删除中的 profile：并发删除时不能把彼此选作新的 current
@@ -365,6 +424,7 @@ interface FetchOptions {
   authToken?: string
   timeout: number
   substore: boolean
+  maxAliasCount?: number
 }
 
 interface FetchResult {
@@ -399,6 +459,18 @@ function normalizeAxiosHeaders(headers: AxiosResponse['headers']): Record<string
   return normalized
 }
 
+function profileNameFromUrl(url: string): string | undefined {
+  try {
+    const pathname = new URL(url).pathname.replace(/\/+$/, '')
+    const segment = pathname.split('/').pop()
+    if (!segment) return undefined
+    const name = decodeURIComponent(segment).replace(/\.(ya?ml|json)$/i, '')
+    return name || undefined
+  } catch {
+    return undefined
+  }
+}
+
 function parsedProfileSummary(parsed: Record<string, unknown>): string {
   const topKeys = Object.keys(parsed).slice(0, 20)
   const proxies = parsed['proxies']
@@ -419,7 +491,8 @@ function parsedProfileSummary(parsed: Record<string, unknown>): string {
 }
 
 async function fetchAndValidateSubscription(options: FetchOptions): Promise<FetchResult> {
-  const { url, useProxy, mixedPort, userAgent, authToken, timeout, substore } = options
+  const { url, useProxy, mixedPort, userAgent, authToken, timeout, substore, maxAliasCount } =
+    options
   const redactedUrl = redactSubscriptionUrl(url)
   const fetchMode = substore ? 'substore' : useProxy ? 'proxy' : 'direct'
 
@@ -489,7 +562,7 @@ async function fetchAndValidateSubscription(options: FetchOptions): Promise<Fetc
   }
 
   const decryptedData = await decryptAgeContent(data, options.ageSecretKey, 'subscription')
-  const parsed = parse(decryptedData) as Record<string, unknown> | null
+  const parsed = parse(decryptedData, { maxAliasCount }) as Record<string, unknown> | null
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     await profileLogger.warn(
       `Remote profile parse failed url=${redactedUrl} mode=${fetchMode} parsedType=${typeof parsed}`
@@ -519,6 +592,9 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
     name: item.name || (item.type === 'remote' ? 'Remote File' : 'Local File'),
     type: item.type || 'local',
     url: item.url,
+    home: item.home,
+    extra: item.extra,
+    customHome: normalizeCustomHome(item.customHome),
     substore: item.substore || false,
     interval: item.interval || 0,
     override: item.override || [],
@@ -532,7 +608,6 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
     updateTimeout: item.updateTimeout
   }
 
-  // Local
   if (newItem.type === 'local') {
     await setProfileStr(id, item.file || '')
     return newItem
@@ -557,7 +632,7 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
   }
 
   const promise = (async (): Promise<IProfileItem> => {
-    const { userAgent, subscriptionTimeout = 30000 } = await getAppConfig()
+    const { userAgent, subscriptionTimeout = 30000, yamlMaxAliasCount } = await getAppConfig()
     const { 'mixed-port': mixedPort = DEFAULT_MIHOMO_PORTS.mixed } =
       await getControledMihomoConfig()
     const userItemTimeoutMs =
@@ -571,7 +646,8 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
       userAgent: item.userAgent || userAgent || `mihomo.party/v${app.getVersion()} (clash.meta)`,
       ageSecretKey: newItem.ageSecretKey,
       authToken: item.authToken,
-      substore: newItem.substore || false
+      substore: newItem.substore || false,
+      maxAliasCount: yamlMaxAliasCount
     }
 
     const fetchSub = (useProxy: boolean, timeout: number): Promise<FetchResult> =>
@@ -604,7 +680,7 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
     if (headers['content-disposition'] && newItem.name === 'Remote File') {
       newItem.name = parseFilename(headers['content-disposition'])
     }
-    if (headers['profile-web-page-url']) {
+    if (isHttpUrl(headers['profile-web-page-url'])) {
       newItem.home = headers['profile-web-page-url']
     }
     if (headers['profile-update-interval'] && !item.allowFixedInterval) {
@@ -635,6 +711,140 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
   }
 }
 
+export async function getProfileImportInfo(
+  item: Pick<
+    IProfileItem,
+    | 'url'
+    | 'useProxy'
+    | 'userAgent'
+    | 'authToken'
+    | 'substore'
+    | 'allowFixedInterval'
+    | 'updateTimeout'
+  >
+): Promise<Partial<IProfileItem>> {
+  if (!item.url) return {}
+  const fallbackName = profileNameFromUrl(item.url)
+  let userAgent: string | undefined
+  let subscriptionTimeout = 30000
+  try {
+    const appConfig = await getAppConfig()
+    userAgent = appConfig.userAgent
+    subscriptionTimeout = appConfig.subscriptionTimeout ?? subscriptionTimeout
+  } catch {
+    // The metadata probe can run before the core configuration is ready.
+  }
+  let mixedPort: number = DEFAULT_MIHOMO_PORTS.mixed
+  try {
+    mixedPort = (await getControledMihomoConfig())['mixed-port'] ?? mixedPort
+  } catch {
+    // Fall back to a direct request when the controlled config is unavailable.
+  }
+  const headers: Record<string, string> = {
+    'User-Agent': item.userAgent || userAgent || `mihomo.party/v${app.getVersion()} (clash.meta)`,
+    'Accept-Encoding': 'identity'
+  }
+  if (item.authToken) headers.Authorization = item.authToken
+  let requestUrl = item.url
+  let proxy:
+    | {
+        protocol: 'http'
+        host: string
+        port: number
+      }
+    | false = false
+  if (item.substore) {
+    const url = new URL(`http://127.0.0.1:${subStorePort}${item.url}`)
+    url.searchParams.set('target', 'ClashMeta')
+    url.searchParams.set('noCache', 'true')
+    if (item.useProxy && mixedPort !== 0)
+      url.searchParams.set('proxy', `http://127.0.0.1:${mixedPort}`)
+    requestUrl = url.toString()
+  } else if (item.useProxy && mixedPort !== 0) {
+    proxy = { protocol: 'http', host: '127.0.0.1', port: mixedPort }
+  }
+  const timeout =
+    typeof item.updateTimeout === 'number' && item.updateTimeout > 0
+      ? item.updateTimeout * 1000
+      : subscriptionTimeout
+  const request = (requestProxy: typeof proxy) =>
+    axios.head(requestUrl, {
+      headers,
+      timeout,
+      proxy: requestProxy,
+      validateStatus: () => true
+    })
+  let response: AxiosResponse
+  let responseProxy = proxy
+  try {
+    response = await request(proxy)
+  } catch {
+    if (!proxy && !item.substore && mixedPort !== 0) {
+      try {
+        responseProxy = { protocol: 'http', host: '127.0.0.1', port: mixedPort }
+        response = await request(responseProxy)
+      } catch {
+        return fallbackName ? { name: fallbackName } : {}
+      }
+    } else {
+      return fallbackName ? { name: fallbackName } : {}
+    }
+  }
+  if (
+    (response.status < 200 || response.status >= 300) &&
+    !proxy &&
+    !item.substore &&
+    mixedPort !== 0
+  ) {
+    try {
+      responseProxy = { protocol: 'http', host: '127.0.0.1', port: mixedPort }
+      response = await request(responseProxy)
+    } catch {
+      // Keep the direct response and use the URL fallback below.
+    }
+  }
+  let responseHeaders =
+    response.status >= 200 && response.status < 300 ? normalizeAxiosHeaders(response.headers) : {}
+  const metadataHeaders = [
+    'content-disposition',
+    'profile-web-page-url',
+    'profile-update-interval',
+    'subscription-userinfo'
+  ]
+  if (!metadataHeaders.some((name) => responseHeaders[name])) {
+    try {
+      const fallback = await axios.get(requestUrl, {
+        headers,
+        timeout,
+        proxy: responseProxy,
+        responseType: 'stream',
+        validateStatus: () => true
+      })
+      responseHeaders = normalizeAxiosHeaders(fallback.headers)
+      const stream = fallback.data as { destroy?: () => void }
+      stream?.destroy?.()
+    } catch {
+      // A metadata probe must not block importing the subscription.
+    }
+  }
+  const result: Partial<IProfileItem> = fallbackName ? { name: fallbackName } : {}
+  if (responseHeaders['content-disposition']) {
+    const name = parseFilename(responseHeaders['content-disposition'])
+    if (name !== 'Remote File') result.name = name
+  }
+  if (!result.name) result.name = fallbackName
+  if (isHttpUrl(responseHeaders['profile-web-page-url']))
+    result.home = responseHeaders['profile-web-page-url']
+  if (responseHeaders['profile-update-interval'] && !item.allowFixedInterval) {
+    const hours = Number(responseHeaders['profile-update-interval'])
+    if (Number.isFinite(hours) && hours > 0)
+      result.interval = Math.min(Math.ceil(hours * 60), MAX_PROFILE_INTERVAL_MINUTES)
+  }
+  if (responseHeaders['subscription-userinfo'])
+    result.extra = parseSubinfo(responseHeaders['subscription-userinfo'])
+  return result
+}
+
 // 候选校验：把新内容放进临时目录，生成带 override 的完整运行配置，再交核心 `-t` 校验。远程订阅与插件订阅
 // 共用；失败抛错，调用方保留旧文件。
 export async function validateProfileCandidate(
@@ -646,23 +856,26 @@ export async function validateProfileCandidate(
   const candidatePath = join(candidateDir, 'config.yaml')
 
   try {
-    const { core = 'mihomo', operationMode, specificVersion, specificSource } = await getAppConfig()
+    const { core = 'mihomo', specificVersion, specificSource } = await getAppConfig()
     const baseProfile = await parseProfileContent(item.id, content, item.ageSecretKey)
     const runtime = await resolveActiveMihomoRuntime({
       core,
       specificVersion,
       specificSource
     })
-    if (operationMode === 'simple') {
-      const [{ compileSimpleConfig }, { resolveSimpleDraft }, { getSimpleState }] =
-        await Promise.all([
-          import('../simple/compiler'),
-          import('../simple/subscriptions'),
-          import('../simple/store')
-        ])
-      const state = await getSimpleState()
-      const draft = await resolveSimpleDraft(state.published, { item, config: baseProfile })
-      // Validate the subscription's nodes even before its first simple-mode import.
+    const { getLocalState } = await import('../local/store')
+    const localState = await getLocalState()
+    const isLocalSource = [...localState.draft.sources, ...localState.published.sources].some(
+      (source) => source.profileId === item.id
+    )
+    if (isLocalSource) {
+      const [{ compileLocalConfig }, { resolveLocalDraft }, { getLocalState }] = await Promise.all([
+        import('../local/compiler'),
+        import('../local/subscriptions'),
+        import('../local/store')
+      ])
+      const state = await getLocalState()
+      const draft = await resolveLocalDraft(state.published, { item, config: baseProfile })
       if (!draft.sources.some((source) => source.profileId === item.id && source.mode !== 'http')) {
         draft.sources.push({
           id: `candidate-${item.id}`,
@@ -673,7 +886,7 @@ export async function validateProfileCandidate(
           proxies: (baseProfile?.proxies || []) as Record<string, unknown>[]
         })
       }
-      const result = compileSimpleConfig(draft, await getControledMihomoConfig())
+      const result = compileLocalConfig(draft, await getControledMihomoConfig())
       if (result.errors.length) throw new Error(result.errors.join('\n'))
       await atomicWriteFile(candidatePath, result.yaml, { encoding: 'utf8' })
       await checkProfileConfig(candidatePath, core, undefined, opts, runtime.activePath)
@@ -705,9 +918,10 @@ export async function getProfileStr(id: string | undefined): Promise<string> {
 export async function setProfileStr(id: string, content: string): Promise<void> {
   // 读取最新的配置
   const { current } = await getProfileConfig(true)
-  if ((await getAppConfig()).operationMode === 'simple') {
-    const { getSimpleState } = await import('../simple/store')
-    const state = await getSimpleState()
+  const currentItem = await getProfileItem(current)
+  if (isLocalProfile(currentItem)) {
+    const { getLocalState } = await import('../local/store')
+    const state = await getLocalState()
     const linked = state.published.sources.some((source) => source.profileId === id)
     const item = await getProfileItem(id)
     if (linked && item) {
@@ -721,13 +935,17 @@ export async function setProfileStr(id: string, content: string): Promise<void> 
         try {
           await mihomoHotReloadConfig()
         } catch (restoreError) {
-          profileLogger.error('Failed to restore simple subscription config', restoreError)
+          profileLogger.error('Failed to restore subscription source config', restoreError)
         }
         throw error
       }
       return
     }
     await atomicWriteFile(profilePath(id), content, { encoding: 'utf8' })
+    if (id === current) {
+      const { importLocalProfileContent } = await import('../local/store')
+      await importLocalProfileContent(content)
+    }
     return
   }
   await atomicWriteFile(profilePath(id), content, { encoding: 'utf8' })
@@ -778,7 +996,8 @@ export async function parseProfileContent(
   }
 
   try {
-    let result = parse(profile)
+    const { yamlMaxAliasCount } = await getAppConfig()
+    let result = parse(profile, { maxAliasCount: yamlMaxAliasCount })
     if (typeof result !== 'object') result = {}
     return result as IMihomoConfig
   } catch (e) {
@@ -936,7 +1155,7 @@ export async function upsertPluginProfile(
   // 调度字段（interval / autoUpdate）不在这里：它们在写入时从插件记录现读，见 commitPluginProfile
   const owned = {
     id: meta.profileId,
-    type: 'plugin' as const,
+    type: 'local' as const,
     name: meta.name,
     pluginId: meta.pluginId,
     updated: Date.now()
@@ -1042,7 +1261,7 @@ export async function syncPluginProfileSchedule(
   let saved: IProfileItem | undefined
   await updateProfileConfig((config) => {
     const idx = config.items.findIndex((i) => i.id === profileId)
-    if (idx === -1 || config.items[idx].type !== 'plugin') return config
+    if (idx === -1 || !config.items[idx].pluginId) return config
     config.items[idx] = {
       ...config.items[idx],
       ...(schedule.interval !== undefined ? { interval: schedule.interval } : {}),

@@ -86,7 +86,7 @@ afterEach(() => {
   vi.useRealTimers()
   Object.defineProperty(process, 'platform', platform)
   if (resources) Object.defineProperty(process, 'resourcesPath', resources)
-  else delete process.resourcesPath
+  else Object.defineProperty(process, 'resourcesPath', { configurable: true, value: undefined })
 })
 
 it.each([false, true])(

@@ -283,8 +283,6 @@ interface ISmartModelStatus {
 }
 
 interface IAppConfig {
-  operationMode?: 'standard' | 'simple'
-  modeSelected?: boolean
   core: 'mihomo' | 'mihomo-alpha' | 'mihomo-smart' | 'mihomo-specific'
   specificVersion?: string
   specificSource?: 'official' | 'custom'
@@ -387,6 +385,7 @@ interface IAppConfig {
   networkIPProvider?: 'ip.sb' | 'ipwho.is' | 'ipapi.is'
   networkInfoCardOrder?: NetworkInfoCardKey[]
   subscriptionTimeout?: number
+  yamlMaxAliasCount?: number
   encryptedPassword?: number[]
   controlDns?: boolean
   disableDnsOverrideGuard?: boolean
@@ -600,12 +599,13 @@ interface ISubscriptionUserInfo {
 
 interface IProfileItem {
   id: string
-  type: 'remote' | 'local' | 'plugin'
+  type: 'remote' | 'local'
   name: string
   url?: string // remote
   file?: string // local
   interval?: number | string
   home?: string
+  customHome?: string
   updated?: number
   override?: string[]
   useProxy?: boolean

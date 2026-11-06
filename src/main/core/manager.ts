@@ -29,6 +29,7 @@ import {
 import { uploadRuntimeConfigIfChanged } from '../resolve/gistApi'
 import { resolveActiveMihomoRuntime } from '../resolve/mihomoActiveRuntime'
 import { startMonitor } from '../resolve/trafficMonitor'
+import { isLocalProfile } from '../../shared/local-config'
 import { ensureRuntimeFiles, safeShowErrorBox } from '../utils/init'
 import { parseAgeSecretKeys } from '../utils/age'
 import i18next from '../../shared/i18n'
@@ -455,17 +456,16 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
 
   const [appConfig, mihomoConfig] = await Promise.all([getAppConfig(), getControledMihomoConfig()])
 
-  let {
+  let { diffWorkDir = false } = appConfig
+  const {
     core = 'mihomo',
     specificVersion,
     specificSource,
     autoSetDNS = true,
-    diffWorkDir = false,
     mihomoCpuPriority = 'PRIORITY_NORMAL',
     coreStartupMode = 'log',
     testProfileOnStart = true
   } = appConfig
-  if (appConfig.operationMode === 'simple') diffWorkDir = false
 
   let { 'log-level': logLevel = 'info' as LogLevel, tun } = mihomoConfig
 
@@ -499,12 +499,14 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
 
   // generateProfile 返回实际使用的 current
   const { profileId: current, dnsGuard } = await generateProfile()
-  if (appConfig.operationMode === 'simple') {
-    const simpleRuntime = await getRuntimeConfig()
-    logLevel = simpleRuntime['log-level'] || 'info'
-    tun = simpleRuntime.tun
+  const currentItem = await getProfileItem(current)
+  if (isLocalProfile(currentItem)) {
+    diffWorkDir = false
+    const localRuntime = await getRuntimeConfig()
+    logLevel = localRuntime['log-level'] || 'info'
+    tun = localRuntime.tun
   }
-  const ageSecretKey = (await getProfileItem(current))?.ageSecretKey || ''
+  const ageSecretKey = currentItem?.ageSecretKey || ''
   if (testProfileOnStart) {
     await checkProfile(current, core, runtime.activePath, diffWorkDir, ageSecretKey)
   }

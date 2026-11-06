@@ -150,7 +150,7 @@ describe('R2-ISS-039: proxy tunnel failure', () => {
 })
 
 describe('R2-ISS-009: errors that carry an HTTP status', () => {
-  const e = (code: string, phase?: 'pre-send' | 'possibly-sent'): unknown =>
+  const e = (code: string, phase?: 'pre-send' | 'possibly-sent'): Error =>
     codedError('x', code, phase)
   it('never fail over, under either policy', () => {
     expect(
