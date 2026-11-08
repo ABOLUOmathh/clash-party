@@ -1,3 +1,12 @@
+# 2.0.4-custom.4
+
+## 自定义组件更新与 Trojan 插件传输适配
+
+- 内置捆绑与 Fresh install / 内置重装的 Sub-Store 后端统一升级至最新正式版 `2.44.6-custom.1`
+- 同步官方 Sub-Store 2.44.6 最新 YAML 逻辑优化
+- 新增支持 Trojan 链接中包含 WebSocket 插件参数（`obfs-local` / `v2ray-plugin`）的自动识别与配置转换（准确导出 `network: ws`、`ws-opts.path` 与 SNI）
+- 完整保留 HeySocks VLESS e/h、OneSocks、HeySocks XHTTP、BLACKSTONE SS-2022、SOCKS5-over-WebSocket 与 Custom Mihomo 升级保护
+
 # 2.0.4-custom.3
 
 ## 官方 smart_core 同步与自定义组件更新

@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version, e.g. 2.0.4-custom.2'
+        description: 'Release version, e.g. 2.0.4-custom.4'
         required: true
-        default: '2.0.4-custom.2'
+        default: '2.0.4-custom.4'
 
 permissions:
   contents: write
@@ -308,7 +308,7 @@ jobs:
 
           Bundled components:
           - Mihomo: v1.19.33-custom.1
-          - Sub-Store: 2.44.5-custom.1
+          - Sub-Store: 2.44.6-custom.1
 
           HeySocks VLESS integration:
           - Preserve custom e/h parameters through Sub-Store VLESS URI parsing and Mihomo output
@@ -320,6 +320,10 @@ jobs:
           - Canonical os:// share-link import support
           - Preserve the previously verified UOT-enabled OneSocks interoperability path
 
+          Trojan WebSocket plugin integration:
+          - Sub-Store natively parses Trojan links with plugin=obfs-local (obfs=websocket) and v2ray-plugin
+          - Accurately emits network: ws, ws-opts.path, and SNI for native Mihomo WebSocket transport
+
           Custom Mihomo features:
           - SOCKS5-over-WebSocket transport support
           - BLACKSTONE Shadowsocks 2022 compatibility
@@ -329,7 +333,7 @@ jobs:
           - Protection against replacing custom Mihomo through the upstream /upgrade path
 
           Additional integration:
-          - Fresh-install and built-in reinstall Sub-Store backend aligned to 2.44.5-custom.1
+          - Fresh-install and built-in reinstall Sub-Store backend aligned to 2.44.6-custom.1
           - Custom Sub-Store runtime selection remains available
           - macOS PKG postinstall uses the Clash Party Custom.app installation path
           EOF
