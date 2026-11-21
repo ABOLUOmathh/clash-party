@@ -19,8 +19,10 @@ fi
 if [[ $2 == *".app" ]]; then
     APP_PATH="$2"
 else
-    APP_PATH="$2/Clash Party.app"
+    APP_PATH="$2/Clash Party Custom.app"
 fi
+
+log "Resolved app path: $APP_PATH"
 
 HELPER_PATH="/Library/PrivilegedHelperTools/party.mihomo.helper"
 LAUNCH_DAEMON="/Library/LaunchDaemons/party.mihomo.helper.plist"

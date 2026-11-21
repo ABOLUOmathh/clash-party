@@ -288,6 +288,7 @@ interface IAppConfig {
   mcpToken?: string
   core: 'mihomo' | 'mihomo-alpha' | 'mihomo-smart' | 'mihomo-specific'
   specificVersion?: string
+  specificSource?: 'official' | 'custom'
   enableSmartCore: boolean
   enableSmartOverride: boolean
   smartCoreUseLightGBM: boolean

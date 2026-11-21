@@ -2,7 +2,9 @@ name: Build
 on:
   push:
     tags:
-      - v*
+      - 'v*'
+      # Custom desktop releases are handled by custom-desktop-release.yml.
+      - '!v*-custom.*'
     paths-ignore:
       - 'README.md'
       - '.github/ISSUE_TEMPLATE/**'

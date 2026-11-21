@@ -62,6 +62,9 @@ import {
   stopSubStoreFrontendServer,
   stopSubStoreBackendServer,
   downloadSubStore,
+  fetchCustomSubStoreReleases,
+  getSubStoreRuntimeState,
+  installCustomSubStoreRuntime,
   subStoreFrontendPort,
   subStorePort
 } from '../resolve/server'
@@ -146,6 +149,8 @@ import {
   queryTrafficUsageBreakdown,
   queryTrafficUsageOverview
 } from '../traffic/database'
+import { getMihomoRuntimeStatus } from '../resolve/mihomoRuntimeStatus'
+import { installSpecificMihomoCore } from '../resolve/mihomoSpecificInstall'
 import {
   getLocalConfig,
   getLocalNode,
@@ -171,7 +176,8 @@ import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
 import { getAppInfo } from './app-info'
 import { logDir, rulePath } from './dirs'
-import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
+// import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
+import { getGitHubTags, getGitHubReleases, clearVersionCache } from './github'
 import { atomicWriteFile } from './safeFile'
 import { startSubStoreServices } from './init'
 
@@ -211,13 +217,13 @@ async function fetchMihomoTags(
   return await getGitHubTags('MetaCubeX', 'mihomo', forceRefresh)
 }
 
-async function installSpecificMihomoCore(version: string): Promise<void> {
-  clearVersionCache('MetaCubeX', 'mihomo')
-  return await installMihomoCore(version)
+async function fetchCustomMihomoTags(forceRefresh = false) {
+  return await getGitHubReleases('ABOLUOmathh', 'mihomo', forceRefresh)
 }
 
 async function clearMihomoVersionCache(): Promise<void> {
   clearVersionCache('MetaCubeX', 'mihomo')
+  clearVersionCache('ABOLUOmathh', 'mihomo')
 }
 
 async function getRuleStr(id: string): Promise<string> {
@@ -380,6 +386,8 @@ const asyncHandlers: Record<string, AsyncFn> = {
   checkUpdate,
   downloadAndInstallUpdate,
   fetchMihomoTags,
+  fetchCustomMihomoTags,
+  getMihomoRuntimeStatus,
   installSpecificMihomoCore,
   clearMihomoVersionCache,
   // Backup
@@ -397,6 +405,9 @@ const asyncHandlers: Record<string, AsyncFn> = {
   stopSubStoreBackendServer,
   ensureSubStoreServices: startSubStoreServices,
   downloadSubStore,
+  fetchCustomSubStoreReleases,
+  getSubStoreRuntimeState,
+  installCustomSubStoreRuntime,
   subStoreSubs,
   subStoreCollections,
   // Theme

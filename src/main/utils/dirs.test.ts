@@ -68,14 +68,15 @@ describe('configureAppPaths', () => {
     expect(paths.sessionData).toBe(path.join(APP_DATA, 'mihomo-party-dev', 'cache'))
   })
 
-  it('leaves packaged stable and dev-release builds on production paths', async () => {
+  it('isolates a packaged custom build on custom production paths', async () => {
     packaged = true
     const { configureAppPaths } = await import('./dirs')
     configureAppPaths()
 
-    expect(setName).not.toHaveBeenCalled()
-    expect(paths.userData).toBe(path.join(APP_DATA, 'mihomo-party'))
-    expect(paths.sessionData).toBe(path.join(APP_DATA, 'mihomo-party', 'cache'))
+    expect(setName).toHaveBeenCalledWith('Clash Party Custom')
+    expect(setPath).toHaveBeenCalledWith('userData', path.join(APP_DATA, 'clash-party-custom'))
+    expect(paths.userData).toBe(path.join(APP_DATA, 'clash-party-custom'))
+    expect(paths.sessionData).toBe(path.join(APP_DATA, 'clash-party-custom', 'cache'))
   })
 
   it('keeps portable userData precedence over local development isolation', async () => {

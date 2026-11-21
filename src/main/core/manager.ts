@@ -27,6 +27,7 @@ import {
   mihomoWorkDir
 } from '../utils/dirs'
 import { uploadRuntimeConfigIfChanged } from '../resolve/gistApi'
+import { resolveActiveMihomoRuntime } from '../resolve/mihomoActiveRuntime'
 import { startMonitor } from '../resolve/trafficMonitor'
 import { isLocalProfile } from '../../shared/local-config'
 import { ensureRuntimeFiles, safeShowErrorBox } from '../utils/init'
@@ -95,7 +96,7 @@ const coreShutdownTimeout = 3000
 const resumeReloadDelay = 5000
 // 同一次失败内核可能连打多行，10 秒内只提示一次，避免弹窗刷屏
 const tunFailureReportInterval = 10000
-const coreProcessNames = ['mihomo', 'mihomo-alpha', 'mihomo-smart'] as const
+const coreProcessNames = ['mihomo', 'mihomo-alpha', 'mihomo-smart', 'mihomo-specific'] as const
 const tailscaleAuthNotificationKeyPrefix = 'tailscale-auth:'
 const directCoreLogLineLimit = 16 * 1024
 
@@ -538,6 +539,8 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   let { diffWorkDir = false } = appConfig
   const {
     core = 'mihomo',
+    specificVersion,
+    specificSource,
     autoSetDNS = true,
     mihomoCpuPriority = 'PRIORITY_NORMAL',
     coreStartupMode = 'log',
@@ -552,6 +555,28 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   // 管理 Smart 内核覆写配置
   await manageSmartOverride()
 
+  const runtime = await resolveActiveMihomoRuntime(
+    {
+      core,
+      specificVersion,
+      specificSource
+    },
+    {
+      migrateLegacy: true,
+      onMigrationError: async (error) => {
+        managerLogger.warn('Failed to migrate legacy Mihomo specific runtime', error)
+      }
+    }
+  )
+
+  if (runtime.fallback) {
+    managerLogger.warn(
+      `Mihomo runtime fallback: requested=${runtime.requestedCore}${
+        runtime.requestedVersion ? `@${runtime.requestedVersion}` : ''
+      }, active=${runtime.activeCore}, reason=${runtime.fallbackReason ?? 'unknown'}`
+    )
+  }
+
   // generateProfile 返回实际使用的 current
   const { profileId: current, dnsGuard } = await generateProfile()
   const currentItem = await getProfileItem(current)
@@ -563,7 +588,7 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   }
   const ageSecretKey = currentItem?.ageSecretKey || ''
   if (testProfileOnStart) {
-    await checkProfile(current, core, diffWorkDir, ageSecretKey)
+    await checkProfile(current, core, runtime.activePath, diffWorkDir, ageSecretKey)
   }
   if (!skipStop && hasCoreProcess()) {
     await stopCoreInternal()
@@ -594,7 +619,7 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     !detached && startupMode === 'post-up' ? await createCoreStartupHook() : undefined
 
   return {
-    corePath: mihomoCorePath(core),
+    corePath: runtime.activePath,
     workDir: diffWorkDir ? mihomoProfileWorkDir(current) : mihomoWorkDir(),
     safePath: diffWorkDir ? mihomoWorkDir() : undefined,
     ipcPath,
@@ -1163,13 +1188,16 @@ export async function quitWithoutCore(): Promise<void> {
 async function checkProfile(
   current: string | undefined,
   core: string = 'mihomo',
+  resolvedCorePath: string,
   diffWorkDir: boolean = false,
   ageSecretKey?: string
 ): Promise<void> {
   await checkProfileConfig(
     diffWorkDir ? mihomoWorkConfigPath(current) : mihomoWorkConfigPath('work'),
     core,
-    ageSecretKey
+    ageSecretKey,
+    {},
+    resolvedCorePath
   )
 }
 
@@ -1185,9 +1213,10 @@ export async function checkProfileConfig(
   configPath: string,
   core: string = 'mihomo',
   ageSecretKey?: string,
-  opts: CheckProfileOptions = {}
+  opts: CheckProfileOptions = {},
+  resolvedCorePath?: string
 ): Promise<void> {
-  const corePath = mihomoCorePath(core)
+  const corePath = resolvedCorePath ?? mihomoCorePath(core)
   await syncSmartModelToTestDir()
 
   try {

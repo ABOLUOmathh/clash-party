@@ -27,6 +27,7 @@ vi.mock('../config', () => ({
   patchControledMihomoConfig: vi.fn()
 }))
 vi.mock('../utils/dirs', () => ({
+  dataDir: () => CORE_DIR,
   mihomoCoreDir: () => CORE_DIR,
   mihomoCorePath: (core: string) => `${CORE_DIR}/${core}`
 }))

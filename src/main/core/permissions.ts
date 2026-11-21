@@ -5,7 +5,12 @@ import { existsSync } from 'fs'
 import path from 'path'
 import { app, dialog, ipcMain } from 'electron'
 import { getAppConfig, getControledMihomoConfig, patchControledMihomoConfig } from '../config'
-import { mihomoCorePath, mihomoCoreDir } from '../utils/dirs'
+import {
+  resolveActiveMihomoRuntime,
+  type MihomoRuntimeSelection
+} from '../resolve/mihomoActiveRuntime'
+import { mihomoSpecificRuntimePaths } from '../resolve/mihomoRuntime'
+import { dataDir, mihomoCoreDir } from '../utils/dirs'
 import { managerLogger } from '../utils/logger'
 import { checkAutoRun, enableAutoRun } from '../sys/autoRun'
 import { disableSysProxySync } from '../sys/sysproxy'
@@ -17,7 +22,7 @@ const execPromise = promisify(exec)
 const execFilePromise = promisify(execFile)
 
 // 内核名称白名单
-const ALLOWED_CORES = ['mihomo', 'mihomo-alpha', 'mihomo-smart'] as const
+const ALLOWED_CORES = ['mihomo', 'mihomo-alpha', 'mihomo-smart', 'mihomo-specific'] as const
 type AllowedCore = (typeof ALLOWED_CORES)[number]
 type StopCoreBeforeAdminRestart = (force?: boolean) => Promise<void>
 
@@ -47,10 +52,17 @@ export function validateCorePath(corePath: string): void {
   }
 
   const normalizedPath = path.normalize(path.resolve(corePath))
-  const expectedDir = path.normalize(path.resolve(mihomoCoreDir()))
+  const bundledDir = path.normalize(path.resolve(mihomoCoreDir()))
+  const persistentSpecificPath = path.normalize(
+    path.resolve(mihomoSpecificRuntimePaths(dataDir()).binaryPath)
+  )
 
-  if (!normalizedPath.startsWith(expectedDir + path.sep) && normalizedPath !== expectedDir) {
-    throw new Error('Invalid core path: not in expected directory')
+  const isBundledPath =
+    normalizedPath === bundledDir || normalizedPath.startsWith(bundledDir + path.sep)
+  const isPersistentSpecificPath = normalizedPath === persistentSpecificPath
+
+  if (!isBundledPath && !isPersistentSpecificPath) {
+    throw new Error('Invalid core path: not an allowed Mihomo runtime path')
   }
 }
 
@@ -85,14 +97,38 @@ async function isSetuidRoot(corePath: string): Promise<boolean> {
   }
 }
 
-export async function checkMihomoCorePermissions(): Promise<boolean> {
-  const { core = 'mihomo' } = await getAppConfig()
-  const corePath = mihomoCorePath(core)
+async function resolvePermissionCorePath(selection?: MihomoRuntimeSelection): Promise<string> {
+  let runtimeSelection = selection
 
+  if (!runtimeSelection) {
+    const { core = 'mihomo', specificVersion, specificSource } = await getAppConfig()
+    runtimeSelection = {
+      core,
+      specificVersion,
+      specificSource
+    }
+  }
+
+  const runtime = await resolveActiveMihomoRuntime(runtimeSelection)
+
+  if (runtime.fallback) {
+    managerLogger.warn(
+      `Mihomo permission target fallback: requested=${runtime.requestedCore}${
+        runtime.requestedVersion ? `@${runtime.requestedVersion}` : ''
+      }, active=${runtime.activeCore}, reason=${runtime.fallbackReason ?? 'unknown'}`
+    )
+  }
+
+  return runtime.activePath
+}
+
+export async function checkMihomoCorePermissions(): Promise<boolean> {
   try {
     if (process.platform === 'win32') {
       return await checkAdminPrivileges()
     }
+
+    const corePath = await resolvePermissionCorePath()
 
     if (process.platform === 'darwin' || process.platform === 'linux') {
       return await isSetuidRoot(corePath)
@@ -106,8 +142,7 @@ export async function checkMihomoCorePermissions(): Promise<boolean> {
 
 export async function checkHighPrivilegeCore(): Promise<boolean> {
   try {
-    const { core = 'mihomo' } = await getAppConfig()
-    const corePath = mihomoCorePath(core)
+    const corePath = await resolvePermissionCorePath()
 
     managerLogger.info(`Checking high privilege core: ${corePath}`)
 
@@ -143,8 +178,8 @@ export async function checkHighPrivilegeCore(): Promise<boolean> {
 async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
   const mihomoExecutables =
     process.platform === 'win32'
-      ? ['mihomo.exe', 'mihomo-alpha.exe', 'mihomo-smart.exe']
-      : ['mihomo', 'mihomo-alpha', 'mihomo-smart']
+      ? ['mihomo.exe', 'mihomo-alpha.exe', 'mihomo-smart.exe', 'mihomo-specific.exe']
+      : ['mihomo', 'mihomo-alpha', 'mihomo-smart', 'mihomo-specific']
 
   try {
     if (process.platform === 'win32') {
@@ -243,13 +278,17 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
 }
 
 export async function grantTunPermissions(): Promise<void> {
-  const { core = 'mihomo' } = await getAppConfig()
+  const { core = 'mihomo', specificVersion, specificSource } = await getAppConfig()
 
   if (!isValidCoreName(core)) {
     throw new Error(`Invalid core name: ${core}. Allowed values: ${ALLOWED_CORES.join(', ')}`)
   }
 
-  const corePath = mihomoCorePath(core)
+  const corePath = await resolvePermissionCorePath({
+    core,
+    specificVersion,
+    specificSource
+  })
   validateCorePath(corePath)
 
   // macOS 安装包已经把内核设为 setuid root，而系统不允许修改 App 包内的文件（root 也不行），

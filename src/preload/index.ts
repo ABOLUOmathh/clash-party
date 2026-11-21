@@ -126,6 +126,8 @@ const validInvokeChannels = [
   'getVersion',
   'platform',
   'fetchMihomoTags',
+  'fetchCustomMihomoTags',
+  'getMihomoRuntimeStatus',
   'installSpecificMihomoCore',
   'clearMihomoVersionCache',
   // Backup
@@ -143,6 +145,9 @@ const validInvokeChannels = [
   'stopSubStoreBackendServer',
   'ensureSubStoreServices',
   'downloadSubStore',
+  'fetchCustomSubStoreReleases',
+  'getSubStoreRuntimeState',
+  'installCustomSubStoreRuntime',
   'subStorePort',
   'subStoreFrontendPort',
   'subStoreSubs',

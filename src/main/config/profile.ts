@@ -12,18 +12,13 @@ import { parse, stringify } from '../utils/yaml'
 import { defaultProfile } from '../utils/template'
 import { decryptAgeContent } from '../utils/age'
 import { DEFAULT_MIHOMO_PORTS } from '../../shared/appConfig'
+import { resolveActiveMihomoRuntime } from '../resolve/mihomoActiveRuntime'
 import { subStorePort } from '../resolve/server'
 import { mihomoCloseAllConnections, mihomoHotReloadConfig } from '../core/mihomoApi'
 import { checkProfileConfig, restartCore, type CheckProfileOptions } from '../core/manager'
 import { generateProfile, globalOverrideIdsNow } from '../core/factory'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
-import {
-  mihomoCorePath,
-  mihomoProfileWorkDir,
-  mihomoWorkDir,
-  profileConfigPath,
-  profilePath
-} from '../utils/dirs'
+import { mihomoProfileWorkDir, mihomoWorkDir, profileConfigPath, profilePath } from '../utils/dirs'
 import { createLogger } from '../utils/logger'
 import { atomicWriteFile } from '../utils/safeFile'
 import { isHttpUrl } from '../utils/url'
@@ -861,8 +856,13 @@ export async function validateProfileCandidate(
   const candidatePath = join(candidateDir, 'config.yaml')
 
   try {
-    const { core = 'mihomo' } = await getAppConfig()
+    const { core = 'mihomo', specificVersion, specificSource } = await getAppConfig()
     const baseProfile = await parseProfileContent(item.id, content, item.ageSecretKey)
+    const runtime = await resolveActiveMihomoRuntime({
+      core,
+      specificVersion,
+      specificSource
+    })
     const { getLocalState } = await import('../local/store')
     const localState = await getLocalState()
     const isLocalSource = [...localState.draft.sources, ...localState.published.sources].some(
@@ -889,7 +889,7 @@ export async function validateProfileCandidate(
       const result = compileLocalConfig(draft, await getControledMihomoConfig())
       if (result.errors.length) throw new Error(result.errors.join('\n'))
       await atomicWriteFile(candidatePath, result.yaml, { encoding: 'utf8' })
-      await checkProfileConfig(candidatePath, core, undefined, opts)
+      await checkProfileConfig(candidatePath, core, undefined, opts, runtime.activePath)
       return
     }
     await generateProfile(undefined, {
@@ -901,7 +901,7 @@ export async function validateProfileCandidate(
       outputPath: candidatePath,
       updateRuntimeConfig: false
     })
-    await checkProfileConfig(candidatePath, core, item.ageSecretKey, opts)
+    await checkProfileConfig(candidatePath, core, item.ageSecretKey, opts, runtime.activePath)
   } finally {
     await rm(candidateDir, { recursive: true, force: true }).catch(() => {})
   }
@@ -1067,9 +1067,18 @@ export async function convertMrsRuleset(filePath: string, behavior: string): Pro
     throw new Error(`Unsupported ruleset behavior: ${behavior}`)
   }
 
-  const { core = 'mihomo' } = await getAppConfig()
-  const corePath = mihomoCorePath(core)
-  const { diffWorkDir = false } = await getAppConfig()
+  const {
+    core = 'mihomo',
+    specificVersion,
+    specificSource,
+    diffWorkDir = false
+  } = await getAppConfig()
+  const runtime = await resolveActiveMihomoRuntime({
+    core,
+    specificVersion,
+    specificSource
+  })
+  const corePath = runtime.activePath
   const { current } = await getProfileConfig()
   let fullPath: string
   if (isAbsolute(filePath)) {

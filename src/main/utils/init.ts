@@ -28,6 +28,11 @@ import {
   getDefaultMihomoTunDevice
 } from '../../shared/appConfig'
 import { LEGACY_SIMPLE_PROFILE_ID, LOCAL_PROFILE_ID } from '../../shared/local-config'
+import {
+  hasSubStoreRuntimeOverride,
+  removeSubStoreRuntimeState,
+  subStoreRuntimeStatePath
+} from '../resolve/substoreRuntime'
 import { stringify } from './yaml'
 import {
   defaultConfig,
@@ -171,7 +176,12 @@ async function killOldMihomoProcesses(): Promise<void> {
 
   try {
     const execFilePromise = promisify(execFile)
-    const coreNames = new Set(['mihomo.exe', 'mihomo-alpha.exe', 'mihomo-smart.exe'])
+    const coreNames = new Set([
+      'mihomo.exe',
+      'mihomo-alpha.exe',
+      'mihomo-smart.exe',
+      'mihomo-specific.exe'
+    ])
     const { stdout } = await execFilePromise('tasklist', ['/FO', 'CSV', '/NH'], {
       windowsHide: true,
       timeout: 3000,
@@ -217,11 +227,39 @@ async function initFiles(): Promise<void> {
 
     await Promise.all(
       targets.map(async (targetPath) => {
-        const shouldCopy = !existsSync(targetPath) || (await isSourceNewer(sourcePath, targetPath))
+        const isSubStoreRuntimeBackend =
+          file === 'sub-store.bundle.cjs' &&
+          targetPath === path.join(mihomoWorkDir(), 'sub-store.bundle.cjs')
+
+        let recoverBundledSubStore = false
+
+        if (isSubStoreRuntimeBackend && existsSync(subStoreRuntimeStatePath(mihomoWorkDir()))) {
+          const preserveRuntimeBackend = await hasSubStoreRuntimeOverride(
+            mihomoWorkDir(),
+            targetPath
+          )
+
+          if (preserveRuntimeBackend) return
+
+          recoverBundledSubStore = true
+        }
+
+        const shouldCopy =
+          recoverBundledSubStore ||
+          !existsSync(targetPath) ||
+          (await isSourceNewer(sourcePath, targetPath))
+
         if (!shouldCopy) return
 
         try {
           await cp(sourcePath, targetPath, { recursive: true, force: true })
+
+          if (recoverBundledSubStore) {
+            await removeSubStoreRuntimeState(mihomoWorkDir())
+            await initLogger.warn(
+              'Recovered bundled Sub-Store backend after invalid runtime override'
+            )
+          }
         } catch (error: unknown) {
           const code = (error as NodeJS.ErrnoException).code
           // 文件被占用或权限问题，如果目标已存在则跳过
@@ -471,15 +509,8 @@ async function migration(): Promise<void> {
 }
 
 function initDeeplink(): void {
-  if (process.defaultApp) {
-    if (process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient('clash', process.execPath, [path.resolve(process.argv[1])])
-      app.setAsDefaultProtocolClient('mihomo', process.execPath, [path.resolve(process.argv[1])])
-    }
-  } else {
-    app.setAsDefaultProtocolClient('clash')
-    app.setAsDefaultProtocolClient('mihomo')
-  }
+  // Custom build intentionally leaves clash:// and mihomo://
+  // registered to the upstream Clash Party installation.
 }
 
 export async function initBasic(): Promise<void> {
